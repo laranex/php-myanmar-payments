@@ -1,0 +1,84 @@
+{
+    "name": "laranex/php-myanmar-payments",
+    "description": "A framework-agnostic PHP SDK for Myanmar payment gateways with typed requests and results",
+    "keywords": [
+        "php-myanmar-payments",
+        "laranex",
+        "myanmar",
+        "payments",
+        "kbzpay",
+        "wavemoney",
+        "ayapay",
+        "yoma",
+        "mmqr",
+        "cybersource"
+    ],
+    "homepage": "https://laranex.vercel.app/laravel-myanmar-payments",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Nay Thu Khant",
+            "email": "naythukhant644@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "php-http/discovery": "^1.19",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/http-message": "^1.1|^2.0",
+        "psr/simple-cache": "^2.0|^3.0"
+    },
+    "require-dev": {
+        "guzzlehttp/guzzle": "^7.8",
+        "laravel/pint": "^1.0",
+        "pestphp/pest": "^3.0|^4.0",
+        "pestphp/pest-plugin-type-coverage": "^3.0|^4.0",
+        "php-http/mock-client": "^1.6",
+        "phpstan/phpstan": "^2.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Laranex\\PhpMyanmarPayments\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Laranex\\PhpMyanmarPayments\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "lint": [
+            "vendor/bin/pint --parallel"
+        ],
+        "lint:check": [
+            "vendor/bin/pint --parallel --test"
+        ],
+        "analyse": [
+            "vendor/bin/phpstan analyse --memory-limit=1G"
+        ],
+        "test:types": [
+            "@php -d memory_limit=-1 vendor/bin/pest --type-coverage --min=100"
+        ],
+        "test:unit": [
+            "vendor/bin/pest"
+        ],
+        "test": [
+            "@analyse",
+            "@lint:check",
+            "@test:types",
+            "@test:unit"
+        ]
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
