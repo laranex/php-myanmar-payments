@@ -73,7 +73,7 @@ it('defaults the amount to the item total and generates a unique reference per a
     $first = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 250)]);
     $second = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 250)]);
 
-    expect($first->amount)->toBe(250)
+    expect($first->amount->toString())->toBe('250')
         ->and($first->merchantReferenceId)->not->toBe($second->merchantReferenceId);
 });
 

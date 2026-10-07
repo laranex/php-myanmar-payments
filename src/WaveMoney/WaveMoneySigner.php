@@ -27,7 +27,7 @@ final class WaveMoneySigner
 
     public function __construct(private readonly string $secretKey) {}
 
-    public function requestHash(int $timeToLive, string $merchantId, string $orderId, int $amount, string $backendResultUrl, string $merchantReferenceId): string
+    public function requestHash(int $timeToLive, string $merchantId, string $orderId, string $amount, string $backendResultUrl, string $merchantReferenceId): string
     {
         return $this->hash([$timeToLive, $merchantId, $orderId, $amount, $backendResultUrl, $merchantReferenceId]);
     }

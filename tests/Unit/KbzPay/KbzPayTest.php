@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Laranex\PhpMyanmarPayments\Amount;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
@@ -168,8 +169,8 @@ it('validates the order against KBZ limits', function (array $overrides, string 
     'order id with dashes' => [['orderId' => 'ORDER-1'], 'orderId'],
     'order id too long' => [['orderId' => str_repeat('a', 41)], 'orderId'],
     'zero amount' => [['amount' => 0], 'amount'],
-    'three decimals' => [['amount' => '1000.505'], 'amount'],
-    'negative' => [['amount' => '-5'], 'amount'],
+    'three decimals' => [['amount' => Amount::parse('1000.505')], 'amount'],
+    'negative' => [['amount' => -5], 'amount'],
     'callback url with query' => [['callbackUrl' => 'https://shop.test/cb?x=1'], 'callbackUrl'],
     'timeout above 120' => [['timeoutMinutes' => 121], 'timeoutMinutes'],
 ]);
@@ -188,7 +189,13 @@ it('normalises the PWA url so the query always follows "#/"', function (string $
 it('sends decimal amounts as KBZ allows up to two decimal places', function () {
     $http = mockHttp(jsonResponse(precreateResponse(['qrCode' => 'qr'])));
 
-    (new KbzPay($this->config, $http))->qr(new KbzPayPaymentData(orderId: 'ORDER_1', amount: '1000.50', callbackUrl: 'https://shop.test/cb'));
+    (new KbzPay($this->config, $http))->qr(new KbzPayPaymentData(orderId: 'ORDER_1', amount: Amount::parse('1000.50'), callbackUrl: 'https://shop.test/cb'));
 
     expect(requestJson($http->getLastRequest())['Request']['biz_content']['total_amount'])->toBe('1000.50');
 });
+
+it('accepts up to two decimal places, as KBZ documents', function () {
+    expect((new KbzPayPaymentData('ORDER_1', Amount::parse('1000.5'), 'https://shop.test/cb'))->amount->toString())->toBe('1000.5');
+
+    new KbzPayPaymentData('ORDER_1', Amount::parse('1000.505'), 'https://shop.test/cb');
+})->throws(InvalidPaymentDataException::class, 'KBZ Pay accepts at most 2 decimal places.');

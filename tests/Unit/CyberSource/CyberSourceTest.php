@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Laranex\PhpMyanmarPayments\Amount;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSource;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSourceConfig;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSourcePaymentData;
@@ -83,7 +84,7 @@ it('rejects a tampered callback', function () {
 })->throws(SignatureVerificationException::class);
 
 it('accepts decimal amounts and other currencies, as the Secure Acceptance spec allows', function () {
-    $payment = $this->gateway->initiate(new CyberSourcePaymentData(orderId: 'ORDER-2', amount: '10.50', callbackUrl: 'https://shop.test/cb', currency: 'USD'));
+    $payment = $this->gateway->initiate(new CyberSourcePaymentData(orderId: 'ORDER-2', amount: Amount::parse('10.50'), callbackUrl: 'https://shop.test/cb', currency: 'USD'));
 
     expect($payment->fields)->toMatchArray(['amount' => '10.50', 'currency' => 'USD']);
 });
@@ -101,8 +102,11 @@ it('enforces the Secure Acceptance field rules', function (array $overrides, str
 })->with([
     'http callback' => [['callbackUrl' => 'http://shop.test/cb'], 'callbackUrl'],
     'url over 255' => [['returnUrl' => 'https://shop.test/'.str_repeat('a', 250)], 'returnUrl'],
-    'amount over 15 chars' => [['amount' => '1234567890123.45'], 'amount'],
-    'float-like garbage' => [['amount' => '1e5'], 'amount'],
+    'amount over 15 chars' => [['amount' => Amount::parse('1234567890123.45')], 'amount'],
     'plain en locale' => [['locale' => 'en'], 'locale'],
     'order id over 50' => [['orderId' => str_repeat('A', 51)], 'orderId'],
 ]);
+
+it('accepts a zero amount, as Secure Acceptance allows', function () {
+    expect($this->gateway->initiate(new CyberSourcePaymentData('ORDER-3', Amount::parse('0.00'), 'https://shop.test/cb'))->fields['amount'])->toBe('0.00');
+});
