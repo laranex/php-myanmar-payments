@@ -62,7 +62,7 @@ class YomaMmqr implements PaymentGateway
         $body = $this->call('payment/checkout', [
             'merchantId' => $this->config->merchantId,
             'orderNumber' => $data->orderId,
-            'amount' => (string) $data->amount,
+            'amount' => $data->amount->toString(),
             'description' => $data->description,
         ]);
 

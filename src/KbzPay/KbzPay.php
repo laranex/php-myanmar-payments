@@ -173,7 +173,7 @@ class KbzPay implements PaymentGateway
             'merch_code' => $this->config->merchantCode,
             'merch_order_id' => $data->orderId,
             'trade_type' => $tradeType,
-            'total_amount' => (string) $data->amount,
+            'total_amount' => $data->amount->toString(),
             'trans_currency' => 'MMK',
             'title' => $data->title,
             'timeout_express' => $data->timeoutMinutes === null ? null : $data->timeoutMinutes.'m',

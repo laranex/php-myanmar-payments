@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\Support;
 
+use Laranex\PhpMyanmarPayments\Amount;
 use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 
 /**
@@ -56,37 +57,31 @@ final class Validator
         return $this;
     }
 
-    public function positive(string $field, int $value): self
-    {
-        if ($value <= 0) {
-            $this->fail($field, "The {$field} field must be greater than 0.");
-        }
-
-        return $this;
-    }
-
     /**
-     * A non-negative amount given as an int or a decimal string such as "1000.50".
+     * Gateway amount rules, taken from each gateway's docs.
+     *
+     * @param  int|null  $maxDecimals  Decimal places the gateway accepts; 0 means whole amounts only, null means any.
      */
-    public function decimal(string $field, int|string $value, int $maxDecimals, ?int $maxLength = null, bool $allowZero = false): self
+    public function amount(string $gateway, Amount $amount, ?int $maxDecimals, bool $allowZero = false, ?int $maxLength = null): self
     {
-        $string = (string) $value;
-        $pattern = $maxDecimals > 0 ? '/^\d+(\.\d{1,'.$maxDecimals.'})?$/' : '/^\d+$/';
-
-        if (preg_match($pattern, $string) !== 1) {
-            $this->fail($field, $maxDecimals > 0
-                ? "The {$field} field must be a number with at most {$maxDecimals} decimal places."
-                : "The {$field} field must be a whole number.");
+        if ($maxDecimals === 0 && $amount->decimalPlaces() > 0) {
+            $this->fail('amount', "{$gateway} does not accept decimal amounts.");
 
             return $this;
         }
 
-        if (! $allowZero && (float) $string <= 0) {
-            $this->fail($field, "The {$field} field must be greater than 0.");
+        if ($maxDecimals !== null && $amount->decimalPlaces() > $maxDecimals) {
+            $this->fail('amount', "{$gateway} accepts at most {$maxDecimals} decimal places.");
+
+            return $this;
         }
 
-        if ($maxLength !== null && strlen($string) > $maxLength) {
-            $this->fail($field, "The {$field} field must not be greater than {$maxLength} characters.");
+        if (! $allowZero && $amount->isZero()) {
+            $this->fail('amount', 'The amount field must be greater than 0.');
+        }
+
+        if ($maxLength !== null && strlen($amount->toString()) > $maxLength) {
+            $this->fail('amount', "The amount field must not be greater than {$maxLength} characters.");
         }
 
         return $this;

@@ -90,7 +90,7 @@ class AyaPay implements PaymentGateway
 
         $fields = [
             'merchOrderId' => $data->orderId,
-            'amount' => (string) $data->amount,
+            'amount' => $data->amount->toString(),
             'appKey' => $this->config->appKey,
             'timestamp' => (string) time(),
             'userRef1' => $userRefs[0],

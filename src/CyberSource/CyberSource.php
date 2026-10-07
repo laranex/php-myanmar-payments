@@ -47,7 +47,7 @@ class CyberSource implements PaymentGateway
             'locale' => $data->locale,
             'transaction_type' => $data->transactionType->value,
             'reference_number' => $data->orderId,
-            'amount' => (string) $data->amount,
+            'amount' => $data->amount->toString(),
             'currency' => $data->currency,
             'override_custom_receipt_page' => (string) $data->returnUrl,
             'override_backoffice_post_url' => $data->callbackUrl,
