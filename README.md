@@ -1,18 +1,28 @@
 # PHP Myanmar Payments
 
-Framework-agnostic PHP SDK for Myanmar payment gateways: KBZ Pay (PWA, QR, In-App), Wave Money, AYA Payment Gateway, Yoma MMQR and CyberSource Secure Acceptance.
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/laranex/php-myanmar-payments.svg?style=flat-square)](https://packagist.org/packages/laranex/php-myanmar-payments)
+[![Tests](https://img.shields.io/github/actions/workflow/status/laranex/php-myanmar-payments/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/laranex/php-myanmar-payments/actions/workflows/tests.yml)
+[![Total Downloads](https://img.shields.io/packagist/dt/laranex/php-myanmar-payments.svg?style=flat-square)](https://packagist.org/packages/laranex/php-myanmar-payments)
+[![License](https://img.shields.io/packagist/l/laranex/php-myanmar-payments.svg?style=flat-square)](LICENSE.md)
 
-Each gateway takes a typed request object and returns a typed result, so your IDE shows exactly what to pass and what comes back.
+A framework-agnostic PHP SDK for Myanmar payment gateways: KBZ Pay (PWA, QR, In-App), Wave Money, AYA Payment Gateway, Yoma MMQR and CyberSource Secure Acceptance. Each gateway takes a typed request object and returns a typed result, callbacks are verified for you, and amounts are exact `Amount` values instead of floats. It is for any PHP application with a PSR-18 HTTP client; Laravel applications can use [`laranex/laravel-myanmar-payments`](https://github.com/laranex/laravel-myanmar-payments), which wraps this package.
 
-Using Laravel? Install [`laranex/laravel-myanmar-payments`](https://github.com/laranex/laravel-myanmar-payments), which wraps this package.
+## Documentation
 
-**Documentation:** [laranex.vercel.app](https://laranex.vercel.app/laravel-myanmar-payments)
+Full documentation lives at **[laranex.vercel.app/php-myanmar-payments](https://laranex.vercel.app/php-myanmar-payments)**.
+
+## Requirements
+
+- PHP 8.1 or higher
+- Any PSR-18 HTTP client (for example `guzzlehttp/guzzle`)
+
+## Installation
 
 ```bash
 composer require laranex/php-myanmar-payments
 ```
 
-Requires PHP 8.1+ and any PSR-18 HTTP client (for example `guzzlehttp/guzzle`).
+## Usage
 
 ```php
 use Laranex\PhpMyanmarPayments\Amount;
@@ -37,13 +47,31 @@ if ($callback->isSuccessful()) {
 $callback->acknowledgement()->send();
 ```
 
-## Amounts
+Amounts are exact `Amount` values (`Amount::kyat(1000)`, `Amount::parse('1000.50')`), and each gateway accepts only what its official docs allow. See the [documentation](https://laranex.vercel.app/php-myanmar-payments) for the other gateways, status checks and configuration.
 
-Amounts are exact `Amount` values, never floats:
+## Testing
 
-```php
-Amount::kyat(1000);        // whole amount (a plain int works too)
-Amount::parse('1000.50');  // decimal amount, plain digits only
+```bash
+composer test
 ```
 
-Each gateway accepts what its official docs allow: KBZ Pay up to 2 decimal places, CyberSource any decimals in any currency, and Wave Money, AYA and Yoma MMQR whole kyat only.
+## Changelog
+
+Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
+
+## Contributing
+
+Please see [CONTRIBUTING](.github/CONTRIBUTING.md) for details.
+
+## Security Vulnerabilities
+
+Please review [our security policy](.github/SECURITY.md) on how to report security vulnerabilities.
+
+## Credits
+
+- [Nay Thu Khant](https://github.com/NayThuKhant)
+- [All Contributors](../../contributors)
+
+## License
+
+The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
