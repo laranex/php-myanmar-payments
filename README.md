@@ -22,6 +22,8 @@ Full documentation lives at **[laranex.vercel.app/php-myanmar-payments](https://
 composer require laranex/php-myanmar-payments
 ```
 
+The HTTP client and PSR-17 factories are found through `php-http/discovery`. Its Composer plugin is optional: if Composer asks, you may allow it (`composer config allow-plugins.php-http/discovery true`) so it installs a client when none is present, or decline and install one yourself, for example `composer require guzzlehttp/guzzle`. Laravel applications already allow the plugin and ship Guzzle.
+
 ## Usage
 
 ```php
