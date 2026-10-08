@@ -43,7 +43,7 @@ header('Location: '.$payment->url);
 $callback = $kbzPay->handleCallback(CallbackRequest::fromGlobals());
 
 if ($callback->isSuccessful()) {
-    // compare $callback->amount with your order, then fulfil $callback->orderId
+    // compare $callback->amount with your order, then fulfill $callback->orderId
 }
 
 $callback->acknowledgement()->send();

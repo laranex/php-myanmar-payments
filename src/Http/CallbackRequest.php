@@ -10,7 +10,7 @@ use Psr\Http\Message\ServerRequestInterface;
  * An incoming request from a gateway (a server callback or a browser return), independent of any framework.
  *
  * Signatures are verified against what the gateway actually sent, so build this from the real request
- * rather than from re-serialised input.
+ * rather than from re-serialized input.
  */
 final class CallbackRequest
 {
