@@ -107,13 +107,17 @@ it('maps every documented callback status', function (string $status, PaymentSta
     ['NEW_STATUS', PaymentStatus::Unknown],
 ]);
 
-it('falls back to merchantReferenceId when the callback has no orderId', function () {
+it('falls back to merchantReferenceId when the callback orderId is missing, null or empty', function (array $orderId) {
     $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback([
-        'status' => 'PAYMENT_CONFIRMED', 'merchantReferenceId' => 'ref-001', 'amount' => '1000',
+        'status' => 'PAYMENT_CONFIRMED', 'merchantReferenceId' => 'ref-001', 'amount' => '1000', ...$orderId,
     ]));
 
     expect($callback->orderId)->toBe('ref-001');
-});
+})->with([
+    'missing' => [[]],
+    'null' => [['orderId' => null]],
+    'empty' => [['orderId' => '']],
+]);
 
 it('rejects a callback signed with another key', function () {
     (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback(['status' => 'PAYMENT_CONFIRMED', 'orderId' => '100'], 'wrong'));
