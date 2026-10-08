@@ -1,7 +1,7 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
     "name": "laranex/php-myanmar-payments",
-    "description": "A framework-agnostic PHP SDK for Myanmar payment gateways with typed requests and results",
+    "description": "PHP SDK for Myanmar payment gateways: KBZ Pay, Wave Money, AYA Pay, Yoma MMQR and CyberSource. Framework-agnostic, typed requests and results, works with any PSR-18 HTTP client.",
     "keywords": [
         "php",
         "laranex",
