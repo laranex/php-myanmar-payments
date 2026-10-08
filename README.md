@@ -49,6 +49,16 @@ $callback->acknowledgement()->send();
 
 Amounts are exact `Amount` values (`Amount::kyat(1000)`, `Amount::parse('1000.50')`), and each gateway accepts only what its official docs allow. See the [documentation](https://laranex.vercel.app/php-myanmar-payments) for the other gateways, status checks and configuration.
 
+### AI agents
+
+This repository ships an agent skill in [`skills/php-myanmar-payments`](skills/php-myanmar-payments) that teaches coding agents (Claude Code, Codex, Cursor and others) how to integrate the gateways correctly. Install it with:
+
+```bash
+npx skills add laranex/php-myanmar-payments
+```
+
+Or copy `skills/php-myanmar-payments` into your project's `.claude/skills` or `.agents/skills` directory.
+
 ## Testing
 
 ```bash

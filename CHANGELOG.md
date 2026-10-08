@@ -18,3 +18,4 @@ Initial release. The version starts at v4.0.0 so that it lines up with the other
 - HTTP through any PSR-18 client (auto-discovered via `php-http/discovery`) and Yoma MMQR tokens cached through any PSR-16 cache, with an in-memory `ArrayCache` as the default.
 - Exceptions: `PaymentException` as the base, with `ApiException`, `ConfigurationException`, `InvalidPaymentDataException` and `SignatureVerificationException`.
 - Requires PHP 8.1 or higher; tested on PHP 8.1 through 8.5 with Pest, PHPStan (level 7) and Pint.
+- Agent skill in `skills/php-myanmar-payments` so coding agents (Claude Code, Codex, Cursor and others) integrate the SDK correctly; install it with `npx skills add laranex/php-myanmar-payments`.
