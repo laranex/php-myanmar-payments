@@ -114,4 +114,4 @@ $callback->acknowledgement()->send(); // or copy its status, headers and body to
 - Treating `PaymentStatus::Pending` or `Unknown` as paid.
 - Passing floats as amounts.
 - Reusing a Wave `merchantReferenceId` (it must be unique per attempt), or calling Yoma `initiate()` twice for the same order (use `renewQr()`).
-- Using a non-HTTPS or non-443 Wave callback URL; opening a KBZ Pay PWA link outside a phone with the KBZ Pay app.
+- Opening a KBZ Pay PWA link outside a phone with the KBZ Pay app.
