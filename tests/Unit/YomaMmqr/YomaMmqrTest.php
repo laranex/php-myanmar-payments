@@ -127,3 +127,23 @@ it('defaults to the production payment hub when not in sandbox', function () {
     expect((new YomaMmqrConfig(merchantId: 'M', clientId: 'c', clientSecret: 's', webhookHashKey: 'h', sandbox: false))->baseUrl)
         ->toBe('https://paymenthubapi.yomabank.com');
 });
+
+it('forgets the cached token so the next call authenticates again', function () {
+    $cache = new ArrayCache;
+    $http = mockHttp(
+        tokenResponse('token-1'),
+        jsonResponse(['refLabel' => '1', 'qrString' => 'a', 'errorCode' => null]),
+        tokenResponse('token-2'),
+        jsonResponse(['refLabel' => '1', 'paymentStatus' => 'PENDING', 'errorCode' => null]),
+    );
+    $yoma = new YomaMmqr($this->config, $http, $cache);
+
+    $yoma->renewQr('ORD-1');
+    $yoma->forgetToken();
+    $yoma->status('1');
+
+    $requests = $http->getRequests();
+    expect($requests)->toHaveCount(4)
+        ->and((string) $requests[2]->getUri())->toBe('https://devapi.yomabank.net/token')
+        ->and($requests[3]->getHeaderLine('Authorization'))->toBe('Bearer token-2');
+});
