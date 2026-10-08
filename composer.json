@@ -94,5 +94,11 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "extra": {
+        "branch-alias": {
+            "dev-dev": "4.x-dev",
+            "dev-main": "4.x-dev"
+        }
+    }
 }
