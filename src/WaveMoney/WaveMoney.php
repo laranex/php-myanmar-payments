@@ -96,7 +96,7 @@ class WaveMoney implements PaymentGateway
     /**
      * Verify Wave's callback. Only `PAYMENT_CONFIRMED` means the customer paid.
      *
-     * `orderId` falls back to `merchantReferenceId` because Wave marks `orderId` as optional.
+     * `orderId` falls back to `merchantReferenceId` when it is missing, null or empty, because Wave marks `orderId` as optional.
      *
      * @throws SignatureVerificationException
      */
@@ -111,13 +111,23 @@ class WaveMoney implements PaymentGateway
         $gatewayStatus = trim((string) ($payload['status'] ?? ''));
 
         return new PaymentCallback(
-            orderId: (string) ($payload['orderId'] ?? $payload['merchantReferenceId'] ?? ''),
+            orderId: $this->orderId($payload),
             status: StatusMap::resolve(self::STATUSES, $gatewayStatus),
             gatewayStatus: $gatewayStatus,
             gatewayReference: isset($payload['transactionId']) ? (string) $payload['transactionId'] : null,
             amount: isset($payload['amount']) ? (string) $payload['amount'] : null,
             raw: $payload,
         );
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $payload
+     */
+    private function orderId(array $payload): string
+    {
+        $orderId = (string) ($payload['orderId'] ?? '');
+
+        return $orderId !== '' ? $orderId : (string) ($payload['merchantReferenceId'] ?? '');
     }
 
     /**
