@@ -14,6 +14,7 @@ Initial release. The version starts at v4.0.0 so that it lines up with the other
 - One result class per flow: `RedirectPayment`, `FormPayment`, `QrPayment` and `AppPayment`, all extending `PaymentResult` and tagged with a `PaymentFlow`.
 - Verified callbacks: `handleCallback()` accepts a `CallbackRequest` (`CallbackRequest::fromGlobals()` or any PSR-7 server request) and returns a `PaymentCallback` with a gateway-independent `PaymentStatus` and the `Acknowledgement` each gateway expects.
 - Status checks for KBZ Pay, AYA Payment Gateway and Yoma MMQR return `PaymentStatusResult`.
+- Wave Money's sandbox is `https://preprodpayments.wavemoney.io:8107` (`WaveMoneyConfig::SANDBOX_URL`), with checkout at `https://preprodpayments.wavemoney.io/authenticate` (`SANDBOX_AUTHENTICATE_URL`).
 - Wave Money callbacks fall back to `merchantReferenceId` for the order id when `orderId` is missing, null or empty (same rule as `go-myanmar-payments`).
 - Exact `Amount` values (`Amount::kyat(1000)`, `Amount::parse('1000.50')`) instead of floats; decimals are allowed only where the gateway's official documentation allows them.
 - HTTP through any PSR-18 client (auto-discovered via `php-http/discovery`) and Yoma MMQR tokens cached through any PSR-16 cache, with an in-memory `ArrayCache` as the default.

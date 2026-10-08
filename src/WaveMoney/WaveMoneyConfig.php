@@ -11,11 +11,11 @@ use Laranex\PhpMyanmarPayments\Support\Config;
  */
 final class WaveMoneyConfig
 {
-    public const SANDBOX_URL = 'https://testpayments.wavemoney.io:8107';
+    public const SANDBOX_URL = 'https://preprodpayments.wavemoney.io:8107';
 
     public const PRODUCTION_URL = 'https://payments.wavemoney.io';
 
-    public const SANDBOX_AUTHENTICATE_URL = 'https://testpayments.wavemoney.io';
+    public const SANDBOX_AUTHENTICATE_URL = 'https://preprodpayments.wavemoney.io';
 
     public const PRODUCTION_AUTHENTICATE_URL = 'https://payments.wavemoney.io';
 

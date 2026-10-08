@@ -42,12 +42,12 @@ it('posts a form encoded, hashed payment request and redirects to authenticate',
 
     $request = $http->getLastRequest();
     $form = requestForm($request);
-    expect((string) $request->getUri())->toBe('https://testpayments.wavemoney.io:8107/payment')
+    expect((string) $request->getUri())->toBe('https://preprodpayments.wavemoney.io:8107/payment')
         ->and($request->getHeaderLine('Content-Type'))->toBe('application/x-www-form-urlencoded')
         ->and($form)->toMatchArray(['order_id' => '100', 'merchant_reference_id' => 'ref-001', 'amount' => '1000', 'merchant_name' => 'Shop'])
         ->and(json_decode($form['items'], true))->toBe([['name' => 'Shoes', 'amount' => 600], ['name' => 'Socks', 'amount' => 400]])
         ->and($form['hash'])->toBe(hash_hmac('sha256', '300testmerchantID1001000https://shop.test/wave/callbackref-001', 'test-secret'))
-        ->and($payment->url)->toBe('https://testpayments.wavemoney.io/authenticate?transaction_id=enc%2F123%2Babc')
+        ->and($payment->url)->toBe('https://preprodpayments.wavemoney.io/authenticate?transaction_id=enc%2F123%2Babc')
         ->and($payment->gatewayReference)->toBe('enc/123+abc');
 });
 
