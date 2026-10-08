@@ -127,6 +127,6 @@ it('requires at least one item', function () {
     new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', []);
 })->throws(InvalidPaymentDataException::class, 'at least one item');
 
-it('requires an HTTPS callback on the standard port, as Wave documents', function (string $url) {
-    new WaveMoneyPaymentData('100', $url, 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 250)]);
-})->with(['http://shop.test/cb', 'https://shop.test:8443/cb'])->throws(InvalidPaymentDataException::class, 'callbackUrl');
+it('accepts http and non-standard port callback URLs', function (string $url) {
+    expect((new WaveMoneyPaymentData('100', $url, 'http://shop.test/done', 'x', [new WaveMoneyItem('A', 250)]))->callbackUrl)->toBe($url);
+})->with(['http://shop.test/cb', 'https://shop.test:8443/cb']);

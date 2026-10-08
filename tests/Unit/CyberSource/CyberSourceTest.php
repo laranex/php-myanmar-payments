@@ -100,12 +100,18 @@ it('enforces the Secure Acceptance field rules', function (array $overrides, str
 
     $this->fail('No validation error was thrown.');
 })->with([
-    'http callback' => [['callbackUrl' => 'http://shop.test/cb'], 'callbackUrl'],
+    'ftp callback' => [['callbackUrl' => 'ftp://shop.test/cb'], 'callbackUrl'],
     'url over 255' => [['returnUrl' => 'https://shop.test/'.str_repeat('a', 250)], 'returnUrl'],
     'amount over 15 chars' => [['amount' => Amount::parse('1234567890123.45')], 'amount'],
     'plain en locale' => [['locale' => 'en'], 'locale'],
     'order id over 50' => [['orderId' => str_repeat('A', 51)], 'orderId'],
 ]);
+
+it('accepts http URLs; the gateway may still require HTTPS in production', function () {
+    $payment = $this->gateway->initiate(new CyberSourcePaymentData('ORDER-4', 1000, 'http://shop.test/cb', returnUrl: 'http://shop.test/done', cancelUrl: 'http://shop.test/cancel'));
+
+    expect($payment->fields['override_backoffice_post_url'])->toBe('http://shop.test/cb');
+});
 
 it('accepts a zero amount, as Secure Acceptance allows', function () {
     expect($this->gateway->initiate(new CyberSourcePaymentData('ORDER-3', Amount::parse('0.00'), 'https://shop.test/cb'))->fields['amount'])->toBe('0.00');

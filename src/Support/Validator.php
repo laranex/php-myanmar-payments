@@ -87,15 +87,6 @@ final class Validator
         return $this;
     }
 
-    public function https(string $field, ?string $value): self
-    {
-        if ($value !== null && $value !== '' && ! str_starts_with(strtolower($value), 'https://')) {
-            $this->fail($field, "The {$field} field must be an HTTPS URL.");
-        }
-
-        return $this;
-    }
-
     public function between(string $field, ?int $value, int $min, int $max): self
     {
         if ($value !== null && ($value < $min || $value > $max)) {
@@ -107,8 +98,8 @@ final class Validator
 
     public function url(string $field, ?string $value): self
     {
-        if ($value !== null && $value !== '' && filter_var($value, FILTER_VALIDATE_URL) === false) {
-            $this->fail($field, "The {$field} field must be a valid URL.");
+        if ($value !== null && $value !== '' && (filter_var($value, FILTER_VALIDATE_URL) === false || ! in_array(strtolower((string) parse_url($value, PHP_URL_SCHEME)), ['http', 'https'], true))) {
+            $this->fail($field, "The {$field} field must be a valid http or https URL.");
         }
 
         return $this;

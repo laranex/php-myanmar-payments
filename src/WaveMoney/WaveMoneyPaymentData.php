@@ -25,7 +25,7 @@ final class WaveMoneyPaymentData
 
     /**
      * @param  string  $orderId  Your order id. One order can have several payment attempts.
-     * @param  string  $callbackUrl  HTTPS URL on port 443 that Wave posts the result to (`backend_result_url`).
+     * @param  string  $callbackUrl  URL that Wave posts the result to (`backend_result_url`).
      * @param  string  $returnUrl  URL Wave sends the customer back to (`frontend_result_url`). Not proof of payment.
      * @param  string  $description  Payment description shown to the customer.
      * @param  list<WaveMoneyItem>  $items  Line items shown on Wave's page.
@@ -48,8 +48,6 @@ final class WaveMoneyPaymentData
             ->required('orderId', $orderId)
             ->required('callbackUrl', $callbackUrl)
             ->url('callbackUrl', $callbackUrl)
-            ->https('callbackUrl', $callbackUrl)
-            ->when(parse_url($callbackUrl, PHP_URL_PORT) !== null && parse_url($callbackUrl, PHP_URL_PORT) !== 443, 'callbackUrl', 'The callbackUrl field must use the standard HTTPS port 443.')
             ->required('returnUrl', $returnUrl)
             ->url('returnUrl', $returnUrl)
             ->required('description', $description)
