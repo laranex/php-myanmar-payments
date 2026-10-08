@@ -39,7 +39,7 @@ Use this skill when a PHP application that is not Laravel (plain PHP, Symfony, S
 
 - wrap the request: `CallbackRequest::fromGlobals()` in plain PHP, `CallbackRequest::fromPsr7($request)` in PSR-7 frameworks; disable CSRF for the route
 - `$callback = $gateway->handleCallback($request)` verifies the signature and returns a `PaymentCallback`, or throws `SignatureVerificationException`; AYA's browser return is checked with `$ayaPay->verifyRedirect($request)`
-- check `$callback->status` (`PaymentStatus`) or `isSuccessful()`, compare `$callback->amount` with the order, make fulfilment idempotent (gateways retry)
+- check `$callback->status` (`PaymentStatus`) or `isSuccessful()`, compare `$callback->amount` with the order, make fulfillment idempotent (gateways retry)
 - reply with `$callback->acknowledgement()->send()` (or copy its `status`, `headers`, `body` to your PSR-7 response)
 
 ### 4. Check status and handle errors
@@ -61,6 +61,6 @@ Use this skill when a PHP application that is not Laravel (plain PHP, Symfony, S
 
 ## Anti-patterns
 
-- do not fulfil from return pages or query strings; fulfil from the verified callback or a status check
+- do not fulfill from return pages or query strings; fulfill from the verified callback or a status check
 - do not pass floats or treat `PaymentStatus::Pending` / `Unknown` as paid
 - do not reuse a Wave `merchantReferenceId` or re-run Yoma `initiate()` for the same order

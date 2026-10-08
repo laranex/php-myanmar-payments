@@ -18,13 +18,13 @@ enum PaymentStatus: string
     /** The payment was attempted and failed or was rejected. */
     case Failed = 'failed';
 
-    /** The payment or order was cancelled or closed before completing. */
+    /** The payment or order was canceled or closed before completing. */
     case Cancelled = 'cancelled';
 
     /** The payment window ran out before the customer paid. */
     case Expired = 'expired';
 
-    /** The gateway sent a status this package does not recognise. Inspect `gatewayStatus`. */
+    /** The gateway sent a status this package does not recognize. Inspect `gatewayStatus`. */
     case Unknown = 'unknown';
 
     public function isFinal(): bool

@@ -182,7 +182,7 @@ it('builds config from an array and names a missing key', function () {
     KbzPayConfig::fromArray(['app_id' => 'a', 'merchant_code' => 'c']);
 })->throws(ConfigurationException::class, '[app_key]');
 
-it('normalises the PWA url so the query always follows "#/"', function (string $pwaUrl) {
+it('normalizes the PWA url so the query always follows "#/"', function (string $pwaUrl) {
     expect((new KbzPayConfig('a', 'b', 'c', pwaUrl: $pwaUrl))->pwaUrl)->toBe('https://static.kbzpay.com/pgw/uat/pwa/#/');
 })->with(['https://static.kbzpay.com/pgw/uat/pwa/#', 'https://static.kbzpay.com/pgw/uat/pwa/#/']);
 

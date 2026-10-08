@@ -156,7 +156,7 @@ class AyaPay implements PaymentGateway
 
     /**
      * Verify the signed query string AYA adds when it sends the customer back to your return URL.
-     * Use it to show the right page; still fulfil orders from the backend callback.
+     * Use it to show the right page; still fulfill orders from the backend callback.
      *
      * @throws SignatureVerificationException
      */

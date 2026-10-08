@@ -4,7 +4,7 @@ All notable changes to `php-myanmar-payments` will be documented in this file.
 
 ## v4.0.0 - Unreleased
 
-Initial release. The version starts at v4.0.0 so that it lines up with the other Laranex packages (`laravel-myanmar-payments` and `go-myanmar-payments`), which share the same gateway behaviour and release cycle.
+Initial release. The version starts at v4.0.0 so that it lines up with the other Laranex packages (`laravel-myanmar-payments` and `go-myanmar-payments`), which share the same gateway behavior and release cycle.
 
 ### Added
 
