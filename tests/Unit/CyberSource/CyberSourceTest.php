@@ -157,3 +157,21 @@ it('falls back to req_amount when auth_amount is empty', function () {
 it('requires a currency and a locale', function (string $field) {
     new CyberSourcePaymentData(...['orderId' => 'ORDER-1', 'amount' => 1000, 'callbackUrl' => 'https://shop.test/cb', $field => '']);
 })->with(['currency', 'locale'])->throws(InvalidPaymentDataException::class);
+
+it('rejects a re-posted checkout form with an unsigned decision added', function () {
+    $payment = $this->gateway->initiate(new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cs/callback'));
+    $fields = $payment->fields + ['decision' => 'ACCEPT', 'req_reference_number' => 'ORDER-1'];
+
+    $this->gateway->handleCallback(new CallbackRequest(http_build_query($fields)));
+})->throws(SignatureVerificationException::class, 'does not sign decision and req_reference_number');
+
+it('requires both decision and req_reference_number to be signed', function (string $signedFields) {
+    $fields = ['decision' => 'ACCEPT', 'req_reference_number' => 'ORDER-1', 'signed_field_names' => $signedFields];
+    $fields['signature'] = cyberSourceSignature($fields);
+    $fields += ['decision' => 'ACCEPT', 'req_reference_number' => 'ORDER-1'];
+
+    $this->gateway->handleCallback(new CallbackRequest(http_build_query($fields)));
+})->with([
+    'decision unsigned' => ['req_reference_number,signed_field_names'],
+    'reference unsigned' => ['decision,signed_field_names'],
+])->throws(SignatureVerificationException::class);

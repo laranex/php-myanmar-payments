@@ -18,7 +18,9 @@ Initial release. The version starts at v4.0.0 so that it lines up with the other
 - Wave Money's sandbox is `https://preprodpayments.wavemoney.io:8107` (`WaveMoneyConfig::SANDBOX_URL`), with checkout at `https://preprodpayments.wavemoney.io/authenticate` (`SANDBOX_AUTHENTICATE_URL`).
 - Wave Money callbacks fall back to `merchantReferenceId` for the order id when `orderId` is missing, null or empty (same rule as `go-myanmar-payments`).
 - Callback and response JSON is decoded with numbers kept as their exact text (strings), so a gateway sending `1000.50` or `1000.0` as a JSON number still verifies; booleans sign as `true` / `false`.
-- Callback verification rejects nested (non-scalar) values in signed fields instead of casting them, and CyberSource reads `decision`, `req_reference_number`, `transaction_id` and the amount only from fields listed in `signed_field_names` (unsigned extras are dropped from `raw`).
+- Callback verification rejects nested (non-scalar) values in signed fields instead of casting them, and CyberSource rejects a post whose `decision` or `req_reference_number` is not listed in `signed_field_names`, reads `transaction_id` and the amount only when signed, and keeps only the signed fields plus `signature` in `raw`.
+- AYA Pay reads a base64 `payload` whose `+` arrived as a space as `+` (the checksum is still verified).
+- `sandbox` accepts `true`/`1`/`t`/`yes`/`on` and `false`/`0`/`f`/`no`/`off` in any case; `Amount::parse()` drops leading zeros of the whole part (`007.50` becomes `7.50`).
 - Exact `Amount` values (`Amount::kyat(1000)`, `Amount::parse('1000.50')`) instead of floats; decimals are allowed only where the gateway's official documentation allows them.
 - HTTP through any PSR-18 client (auto-discovered via `php-http/discovery`) and Yoma MMQR tokens cached through any PSR-16 cache, with an in-memory `ArrayCache` as the default.
 - Exceptions: `PaymentException` as the base, with `ApiException`, `ConfigurationException`, `InvalidPaymentDataException` and `SignatureVerificationException`.

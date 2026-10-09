@@ -66,7 +66,8 @@ class CyberSource implements PaymentGateway
     /**
      * Verify CyberSource's result post. The same check works for the browser post to your receipt page.
      *
-     * Only the fields listed in `signed_field_names` are read, so unsigned extra fields can't change the result.
+     * `decision` and `req_reference_number` must be signed, and only fields listed in `signed_field_names` are
+     * read, so unsigned extra fields (e.g. a re-posted checkout form with `decision=ACCEPT` added) can't change the result.
      *
      * @throws SignatureVerificationException
      */
@@ -80,6 +81,10 @@ class CyberSource implements PaymentGateway
         }
 
         $signed = array_intersect_key($payload, array_flip($this->signedFieldNames($payload)));
+
+        if (! isset($signed['decision'], $signed['req_reference_number'])) {
+            throw new SignatureVerificationException('CyberSource callback does not sign decision and req_reference_number.', $payload);
+        }
         $decision = strtoupper(trim((string) ($signed['decision'] ?? '')));
 
         return new PaymentCallback(

@@ -161,3 +161,13 @@ it('throws when the enquiry payload checksum does not match', function () {
 it('reports the HTTP status when AYA answers without a status code', function () {
     (new AyaPay($this->config, mockHttp(jsonResponse([], 502))))->services();
 })->throws(ApiException::class, 'AYA Pay services failed with HTTP 502.');
+
+it('reads a return payload whose "+" arrived as a space', function () {
+    $payload = ['merchOrderId' => 'ORD123456', 'amount' => '1000', 'statusCode' => '00', 'description' => '~~~>>>'];
+    $signed = ayaSigned($payload, 'ORD123456:1000:00:~~~>>>');
+    expect($signed['payload'])->toContain('+');
+
+    $query = ['payload' => str_replace('+', ' ', $signed['payload']), 'checkSum' => $signed['checkSum']];
+
+    expect((new AyaPay($this->config, mockHttp()))->verifyRedirect(new CallbackRequest(query: $query))->isSuccessful())->toBeTrue();
+});

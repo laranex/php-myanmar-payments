@@ -10,18 +10,21 @@ use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyItem;
 use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyPaymentData;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrPaymentData;
 
-it('parses plain decimal strings exactly as given', function (string $input, int $decimals, string $whole) {
+it('parses plain decimal strings, keeping the fraction exactly and dropping leading zeros', function (string $input, int $decimals, string $whole, string $expected) {
     $amount = Amount::parse($input);
 
-    expect($amount->toString())->toBe($input)
-        ->and((string) $amount)->toBe($input)
+    expect($amount->toString())->toBe($expected)
+        ->and((string) $amount)->toBe($expected)
         ->and($amount->decimalPlaces())->toBe($decimals)
         ->and($amount->wholePart())->toBe($whole);
 })->with([
-    ['1000', 0, '1000'],
-    ['1000.50', 2, '1000'],
-    ['0.001', 3, '0'],
-    ['007.5', 1, '7'],
+    ['1000', 0, '1000', '1000'],
+    ['1000.50', 2, '1000', '1000.50'],
+    ['0.001', 3, '0', '0.001'],
+    ['007.5', 1, '7', '7.5'],
+    ['0100', 0, '100', '100'],
+    ['000', 0, '0', '0'],
+    ['00.00', 2, '0', '0.00'],
 ]);
 
 it('rejects anything that is not plain digits', function (string $input) {

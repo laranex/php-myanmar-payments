@@ -183,13 +183,16 @@ class AyaPay implements PaymentGateway
     }
 
     /**
+     * A `+` in the base64 payload that arrived as a space (an unencoded query string) is read back as `+`;
+     * the checksum is still verified.
+     *
      * @param  array<string, mixed>  $input  Holds `payload` (base64 JSON) and `checkSum`.
      * @return array<string, mixed>
      */
     private function verifiedPayload(array $input, string $context): array
     {
         $payload = is_string($input['payload'] ?? null) && is_string($input['checkSum'] ?? null)
-            ? $this->signer->verifyPayload($input['payload'], $input['checkSum'])
+            ? $this->signer->verifyPayload(str_replace(' ', '+', $input['payload']), $input['checkSum'])
             : null;
 
         if ($payload === null) {
