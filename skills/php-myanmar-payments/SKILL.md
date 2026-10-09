@@ -11,7 +11,7 @@ metadata:
 
 ## When to use
 
-Use this skill when a PHP application that is not Laravel (plain PHP, Symfony, Slim, WordPress, ...) takes payments through KBZ Pay, Wave Money, AYA Payment Gateway, Yoma MMQR or CyberSource. Start payments and verify callbacks with the package's typed API; never build gateway signatures by hand. In Laravel, use `laranex/laravel-myanmar-payments` instead; it wraps this package.
+Use this skill when a PHP application takes payments through KBZ Pay, Wave Money, AYA Payment Gateway, Yoma MMQR or CyberSource. Start payments and verify callbacks with the package's typed API; never build gateway signatures by hand. In Laravel, use `laranex/laravel-myanmar-payments` instead; it wraps this package.
 
 ## Install
 
@@ -19,47 +19,29 @@ Use this skill when a PHP application that is not Laravel (plain PHP, Symfony, S
 composer require laranex/php-myanmar-payments guzzlehttp/guzzle
 ```
 
-Requires PHP 8.1+ and any PSR-18 HTTP client (Guzzle is one); the client is auto-discovered when you don't pass one.
+Requires PHP 8.1+ and any PSR-18 HTTP client (Guzzle is one); the client is auto-discovered when you don't pass one. Each gateway lives in its own namespace: `Laranex\PhpMyanmarPayments\KbzPay`, `WaveMoney`, `AyaPay`, `YomaMmqr` and `CyberSource`.
 
 ## Configure
 
-Build one gateway from its config object. Every config defaults to the sandbox; pass `sandbox: false` in production.
-
-```php
-use Laranex\PhpMyanmarPayments\KbzPay\KbzPay;
-use Laranex\PhpMyanmarPayments\KbzPay\KbzPayConfig;
-
-$kbzPay = new KbzPay(new KbzPayConfig(appId: '...', appKey: '...', merchantCode: '...', sandbox: true));
-```
-
-- `WaveMoney` with `WaveMoneyConfig(merchantId:, secretKey:, merchantName:)`
-- `AyaPay` with `AyaPayConfig(appKey:, appSecret:)`
-- `YomaMmqr` with `YomaMmqrConfig(merchantId:, clientId:, clientSecret:, webhookHashKey:)`; its third constructor argument is a PSR-16 cache for the access token (default: in-memory `ArrayCache`, so pass a shared cache in production)
-- `CyberSource` with `CyberSourceConfig(profileId:, accessKey:, secretKey:)` (no HTTP client)
-
-The second constructor argument of `KbzPay`, `WaveMoney`, `AyaPay` and `YomaMmqr` is an optional PSR-18 client.
-
-Or build every gateway from one snake_case array:
+`MyanmarPayments::fromEnv()` reads `KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*` (or `AYA_PGW_*`), `YOMA_MMQR_*` and `CYBER_SOURCE_*` (the same variables as the Go, Node and Python SDKs). `sandbox` defaults to `true`; set `*_SANDBOX=false` (or `sandbox: false`) in production.
 
 ```php
 use Laranex\PhpMyanmarPayments\MyanmarPayments;
 
-$payments = new MyanmarPayments([
-    'kbz_pay' => ['app_id' => '...', 'app_key' => '...', 'merchant_code' => '...', 'sandbox' => true],
-], $psr18Client, $psr16Cache);
-
+$payments = MyanmarPayments::fromEnv(); // create once, share across requests
 $kbzPay = $payments->kbzPay(); // also waveMoney(), ayaPay(), yomaMmqr(), cyberSource()
 ```
 
-Or read the same environment variables as the Go, Node and Python SDKs (`KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*`, `YOMA_MMQR_*`, `CYBER_SOURCE_*`) with `MyanmarPayments::fromEnv($env = null, $psr18Client, $psr16Cache)`, `KbzPayConfig::fromEnv()` or `KbzPay::fromEnv()`. Gateways also accept the snake_case array in place of a config object.
-
-A missing or blank credential throws `ConfigurationException` (with `gateway` and `key`).
+- Or build one gateway: `new KbzPay(new KbzPayConfig(appId: '...', appKey: '...', merchantCode: '...'))`, `KbzPay::fromEnv()` or `new KbzPay(KbzPayConfig::fromEnv())`.
+- Or pass the settings directly: gateways and `new MyanmarPayments([...])` take config objects or snake_case arrays (`['kbz_pay' => ['app_id' => '...', 'app_key' => '...', 'merchant_code' => '...']]`).
+- Options: a PSR-18 client (second argument of `KbzPay`, `WaveMoney`, `AyaPay`, `YomaMmqr` and `MyanmarPayments`; without one, Guzzle gets a 30 second timeout). Yoma and the facade also take a PSR-16 cache for the access token (default: in-memory `ArrayCache`; pass a shared cache when you run several processes).
+- A missing credential throws `ConfigurationException` (`gateway`, `key`).
 
 ## Use
 
 ### Amounts
 
-Pass an `int` (whole kyat) or an `Amount` (`Amount::kyat(1000)`, `Amount::parse('1000.50')`), never a float. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data throws `InvalidPaymentDataException`; read the messages with `errors()`. Compare a gateway's amount with `$amount->equals($callback->amount)`.
+Amounts are `Amount::kyat(1000)`, `Amount::parse('1000.50')` or a whole `int`; never a float. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data throws `InvalidPaymentDataException` with `errors()` per field, before any request is sent. Compare a gateway's amount by value with `$amount->equals($callback->amount)`.
 
 ### Start a payment
 
@@ -68,52 +50,63 @@ Each gateway takes a data object (`KbzPayPaymentData`, `WaveMoneyPaymentData` wi
 ```php
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPayPaymentData;
 
-$payment = $kbzPay->pwa(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/kbz/callback'));
+$payment = $kbzPay->pwa(new KbzPayPaymentData(
+    orderId: 'ORDER_1',
+    amount: 1000,
+    callbackUrl: 'https://shop.test/payments/kbz/callback',
+));
 
 header('Location: '.$payment->url);
 ```
 
-- `RedirectPayment` from `KbzPay::pwa()` and `WaveMoney::initiate()`: redirect to `$payment->url`. For Wave, store `$data->merchantReferenceId` with the order.
-- `FormPayment` from `AyaPay::initiate()` and `CyberSource::initiate()`: `echo $payment->toHtml()` for an auto-submitting page, or render `action` and `fields` yourself.
-- `QrPayment` from `KbzPay::qr()` (encode `qrString`) and `YomaMmqr::initiate()` (`qrImage` as base64, `qrImageDataUri()`, `expiresAt`, `reference`). A Yoma QR lives `YomaMmqr::QR_LIFETIME_SECONDS` (120); renew it with `renewQr($orderId)`.
-- `AppPayment` from `KbzPay::app()`: return `$payment->toArray()` to the mobile app.
+- `RedirectPayment` (`url`) from `$kbzPay->pwa($data)` and `$waveMoney->initiate($data)`. Wave fills `$data->merchantReferenceId` when empty; store it.
+- `FormPayment` from `$ayaPay->initiate($data)` and `$cyberSource->initiate($data)` (no network call): `echo $payment->toHtml()` for an auto-submitting page, or render `action`, `fields` and `enctype` yourself.
+- `QrPayment` from `$kbzPay->qr($data)` (encode `qrString`) and `$yomaMmqr->initiate($data)` (`qrImageDataUri()`, `expiresAt`, `reference`). A Yoma QR lives `YomaMmqr::QR_LIFETIME_SECONDS` (120); renew it with `$yomaMmqr->renewQr($orderId)`.
+- `AppPayment` from `$kbzPay->app($data)`: return `$payment->toArray()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.
 
-AYA Pay needs a channel: list them with `$ayaPay->services()` (each `AyaPayService` has `key` and `supports(AyaPayMethod $method)`), then `$ayaPay->initiate(new AyaPayPaymentData('ORDER123', 1000, 'kbz_pay', AyaPayMethod::Qr))`. The order id must be 6 to 40 characters.
+AYA needs a channel: `$ayaPay->services()` lists `AyaPayService` entries (`key`, `supports($method)`), then `$ayaPay->initiate(new AyaPayPaymentData('ORDER123', 1000, 'kbz_pay', AyaPayMethod::Qr))`.
 
 ### Handle the callback
 
-Wrap the incoming request, verify it, then reply:
+Build a `CallbackRequest` from the raw request, verify it, then reply:
 
 ```php
+use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 
-$callback = $kbzPay->handleCallback(CallbackRequest::fromGlobals()); // or CallbackRequest::fromPsr7($request)
-
+try {
+    $callback = $kbzPay->handleCallback(CallbackRequest::fromGlobals()); // or fromPsr7($request)
+} catch (SignatureVerificationException) {
+    http_response_code(400);
+    exit('invalid signature');
+}
 if ($callback->isSuccessful()) {
     // compare $callback->amount with the order, then fulfill $callback->orderId once
 }
-
-$callback->acknowledgement->send(); // or copy its status, headers and body to your PSR-7 response
+$callback->acknowledgement->send(); // or copy its status, headers and body to your response
 ```
 
-`handleCallback()` throws `SignatureVerificationException` when the signature is wrong. Check AYA's browser return with `$ayaPay->verifyRedirect($request)`. Disable CSRF protection for callback routes.
+- Give the package the raw body: `fromGlobals()` reads `php://input` and `fromPsr7()` the PSR-7 body; disable CSRF protection for callback routes.
+- Check AYA's browser return with `$ayaPay->verifyRedirect($request)`.
+- For production, store the verified callback, acknowledge immediately, then process it once in the background.
 
 ### Check status and handle errors
 
-- `KbzPay::status($orderId)`, `AyaPay::status($orderId)` and `YomaMmqr::status($reference)` return a `PaymentStatusResult` with `status` and `isSuccessful()`.
-- Statuses are the `PaymentStatus` enum: `Successful`, `Pending`, `Failed`, `Canceled`, `Expired`, `Unknown`.
-- Gateway errors throw `ApiException` (`gatewayCode`, `gatewayMessage`, `httpStatus`, `raw`); catch `PaymentException` for every package error.
+- `$kbzPay->status($orderId)`, `$ayaPay->status($orderId)` and `$yomaMmqr->status($reference)` return `PaymentStatusResult` with `status` and `isSuccessful()`. Wave Money and CyberSource have no status API.
+- Statuses: `PaymentStatus::Successful`, `Pending`, `Failed`, `Canceled`, `Expired`, `Unknown`; `$status->isFinal()`.
+- Gateway failures throw `ApiException` (`gatewayCode`, `gatewayMessage`, `httpStatus`, `raw`; network errors are the previous exception). All errors extend `PaymentException`.
 
 ## Test your app
 
-- Pass a mock PSR-18 client (for example `php-http/mock-client`) to the gateway constructor or to `MyanmarPayments` and queue the gateway's JSON responses.
-- Replay a stored callback with `CallbackRequest::fromArray($payload, $headers)`; it is still signature-checked, so use a payload the gateway actually signed.
-- To test your own fulfillment code, build a `PaymentCallback` yourself (`new PaymentCallback('ORDER_1', PaymentStatus::Successful, 'PAY_SUCCESS')`) instead of calling the gateway.
+- Pass a mock PSR-18 client (for example `php-http/mock-client`) to the gateway or to `MyanmarPayments` and queue the gateway's JSON responses.
+- Replay a stored callback with `CallbackRequest::fromArray($payload, $headers)` or `new CallbackRequest($body, $headers, $query)`; it is still signature-checked.
+- To test your own fulfillment code, build `new PaymentCallback('ORDER_1', PaymentStatus::Successful, 'PAY_SUCCESS')` yourself.
 
 ## Avoid
 
 - Fulfilling orders from return pages or query strings; fulfill only from a verified callback or a status check.
-- Treating `PaymentStatus::Pending` or `Unknown` as paid.
-- Passing floats as amounts.
-- Reusing a Wave `merchantReferenceId` (it must be unique per attempt), or calling Yoma `initiate()` twice for the same order (use `renewQr()`).
+- Treating `Pending` or `Unknown` as paid.
+- Passing floats or `(float) $price` as amounts; use `Amount::parse()`.
+- Building the `CallbackRequest` from `$_POST` or a decoded array instead of the raw body.
+- Reusing a Wave `merchantReferenceId`, or calling Yoma `initiate()` twice for one order (use `renewQr()`).
 - Opening a KBZ Pay PWA link outside a phone with the KBZ Pay app.
