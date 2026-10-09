@@ -67,7 +67,7 @@ it('reads the order id from req_reference_number and the decision as the status'
     ['REVIEW', PaymentStatus::Pending],
     ['DECLINE', PaymentStatus::Failed],
     ['ERROR', PaymentStatus::Failed],
-    ['CANCEL', PaymentStatus::Cancelled],
+    ['CANCEL', PaymentStatus::Canceled],
 ]);
 
 it('rejects a callback whose signed fields are missing', function () {

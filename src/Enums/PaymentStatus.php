@@ -19,7 +19,7 @@ enum PaymentStatus: string
     case Failed = 'failed';
 
     /** The payment or order was canceled or closed before completing. */
-    case Cancelled = 'cancelled';
+    case Canceled = 'canceled';
 
     /** The payment window ran out before the customer paid. */
     case Expired = 'expired';

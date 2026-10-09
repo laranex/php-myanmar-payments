@@ -26,3 +26,7 @@ Initial release. The version starts at v4.0.0 so that it lines up with the other
 - Exceptions: `PaymentException` as the base, with `ApiException`, `ConfigurationException`, `InvalidPaymentDataException` and `SignatureVerificationException`.
 - Requires PHP 8.1 or higher; tested on PHP 8.1 through 8.5 with Pest, PHPStan (level 7) and Pint.
 - Agent skill in `skills/php-myanmar-payments` so coding agents (Claude Code, Codex, Cursor and others) integrate the SDK correctly; install it with `npx skills add laranex/php-myanmar-payments`.
+
+### Changed since the pre-releases
+
+- `PaymentStatus::Cancelled` is renamed to `PaymentStatus::Canceled` and its value from `'cancelled'` to `'canceled'` (American English), with no alias. Code or stored statuses from `v4.0.0-alpha.1` need the new name; gateway status literals such as Wave Money's `PAYMENT_REQUEST_CANCELLED` are unchanged.

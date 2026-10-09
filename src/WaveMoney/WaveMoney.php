@@ -25,7 +25,7 @@ class WaveMoney implements PaymentGateway
         'INSUFFICIENT_BALANCE' => PaymentStatus::Pending,
         'ACCOUNT_LOCKED' => PaymentStatus::Failed,
         'BILL_COLLECTION_FAILED' => PaymentStatus::Failed,
-        'PAYMENT_REQUEST_CANCELLED' => PaymentStatus::Cancelled,
+        'PAYMENT_REQUEST_CANCELLED' => PaymentStatus::Canceled,
         'TRANSACTION_TIMED_OUT' => PaymentStatus::Expired,
         'SCHEDULER_TRANSACTION_TIMED_OUT' => PaymentStatus::Expired,
     ];

@@ -57,7 +57,7 @@ it('knows which statuses are final', function (PaymentStatus $status, bool $fina
     [PaymentStatus::Successful, true],
     [PaymentStatus::Pending, false],
     [PaymentStatus::Failed, true],
-    [PaymentStatus::Cancelled, true],
+    [PaymentStatus::Canceled, true],
     [PaymentStatus::Expired, true],
     [PaymentStatus::Unknown, false],
 ]);
