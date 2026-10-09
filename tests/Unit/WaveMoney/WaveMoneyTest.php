@@ -153,11 +153,11 @@ it('generates a merchant reference id when an empty one is given', function () {
 
 it('hashes boolean and numeric callback values as their JSON text', function () {
     $fields = ['status', 'timeToLiveSeconds', 'merchantId', 'orderId', 'amount', 'backendResultUrl', 'merchantReferenceId', 'initiatorMsisdn', 'transactionId', 'paymentRequestId', 'requestTime'];
-    $payload = ['status' => 'PAYMENT_CONFIRMED', 'timeToLiveSeconds' => '300', 'orderId' => '100', 'amount' => '1000.0', 'merchantReferenceId' => 'ref-001', 'initiatorMsisdn' => 'true'];
+    $payload = ['status' => 'PAYMENT_CONFIRMED', 'timeToLiveSeconds' => '300', 'orderId' => '100', 'amount' => '1000.00', 'merchantReferenceId' => 'ref-001', 'initiatorMsisdn' => 'true'];
     $payload['hashValue'] = hash_hmac('sha256', implode('', array_map(fn ($field) => $payload[$field] ?? 'null', $fields)), 'test-secret');
-    $body = strtr((string) json_encode($payload), ['"timeToLiveSeconds":"300"' => '"timeToLiveSeconds":300', '"amount":"1000.0"' => '"amount":1000.0', '"initiatorMsisdn":"true"' => '"initiatorMsisdn":true']);
+    $body = strtr((string) json_encode($payload), ['"timeToLiveSeconds":"300"' => '"timeToLiveSeconds":300', '"amount":"1000.00"' => '"amount":1000.00', '"initiatorMsisdn":"true"' => '"initiatorMsisdn":true']);
 
     $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(new CallbackRequest($body));
 
-    expect($callback->amount)->toBe('1000.0')->and($callback->isSuccessful())->toBeTrue();
+    expect($callback->amount)->toBe('1000.00')->and($callback->isSuccessful())->toBeTrue();
 });

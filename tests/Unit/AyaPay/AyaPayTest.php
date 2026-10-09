@@ -171,3 +171,12 @@ it('reads a return payload whose "+" arrived as a space', function () {
 
     expect((new AyaPay($this->config, mockHttp()))->verifyRedirect(new CallbackRequest(query: $query))->isSuccessful())->toBeTrue();
 });
+
+it('verifies a payload whose amount is a JSON number against its exact text', function () {
+    $json = '{"merchOrderId":"ORD123456","amount":1000.00,"statusCode":"00","approved":true}';
+    $input = ['payload' => base64_encode($json), 'checkSum' => hash_hmac('sha256', 'ORD123456:1000.00:00', 'test-secret')];
+
+    $callback = (new AyaPay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($input));
+
+    expect($callback->amount)->toBe('1000.00')->and($callback->isSuccessful())->toBeTrue();
+});
