@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\WaveMoney;
 
+use Laranex\PhpMyanmarPayments\Support\Json;
+
 /**
- * Wave's HMAC-SHA256 hashes: fixed field order, no separator, lowercase hex. Null becomes the string "null".
+ * Wave's HMAC-SHA256 hashes: fixed field order, no separator, lowercase hex. Null becomes the string "null", booleans `true` / `false`.
  *
  * @internal
  */
@@ -45,6 +47,12 @@ final class WaveMoneySigner
      */
     public function verifyCallback(array $payload): bool
     {
+        foreach (self::CALLBACK_FIELDS as $field) {
+            if (isset($payload[$field]) && ! is_scalar($payload[$field])) {
+                return false;
+            }
+        }
+
         return is_string($payload['hashValue'] ?? null) && hash_equals($this->callbackHash($payload), strtolower($payload['hashValue']));
     }
 
@@ -53,6 +61,6 @@ final class WaveMoneySigner
      */
     private function hash(array $values): string
     {
-        return hash_hmac('sha256', implode('', array_map(fn (mixed $value): string => $value === null ? 'null' : (string) $value, $values)), $this->secretKey);
+        return hash_hmac('sha256', implode('', array_map(fn (mixed $value): string => $value === null ? 'null' : Json::scalarString($value), $values)), $this->secretKey);
     }
 }

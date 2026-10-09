@@ -50,8 +50,10 @@ final class CyberSourcePaymentData
             ->max('returnUrl', $returnUrl, 255)
             ->url('cancelUrl', $cancelUrl)
             ->max('cancelUrl', $cancelUrl, 255)
-            ->pattern('currency', $currency, '/^[A-Z]{3}$/', 'a three letter ISO 4217 code')
-            ->pattern('locale', $locale, '/^[a-z]{2}-[a-z]{2}$/', 'a locale code such as en-us')
+            ->required('currency', $currency)
+            ->pattern('currency', $currency, '/^[A-Z]{3}\z/', 'a three letter ISO 4217 code')
+            ->required('locale', $locale)
+            ->pattern('locale', $locale, '/^[a-z]{2}-[a-z]{2}\z/', 'a locale code such as en-us')
             ->validate();
     }
 }

@@ -23,10 +23,18 @@ final class KbzPaySigner
     }
 
     /**
+     * Nested values are never signed, so a payload carrying one is rejected rather than partly trusted.
+     *
      * @param  array<string, mixed>  $fields
      */
     public function verify(array $fields): bool
     {
+        foreach ($fields as $value) {
+            if ($value !== null && ! is_scalar($value)) {
+                return false;
+            }
+        }
+
         return is_string($fields['sign'] ?? null) && hash_equals($this->sign($fields), strtoupper($fields['sign']));
     }
 

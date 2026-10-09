@@ -130,3 +130,34 @@ it('requires at least one item', function () {
 it('accepts http and non-standard port callback URLs', function (string $url) {
     expect((new WaveMoneyPaymentData('100', $url, 'http://shop.test/done', 'x', [new WaveMoneyItem('A', 250)]))->callbackUrl)->toBe($url);
 })->with(['http://shop.test/cb', 'https://shop.test:8443/cb']);
+
+it('rejects a callback whose signed fields are not scalar', function () {
+    $request = signWaveCallback(['status' => 'PAYMENT_CONFIRMED', 'orderId' => '100', 'merchantReferenceId' => 'ref-001']);
+    $payload = $request->parsedBody();
+    $payload['orderId'] = ['100'];
+
+    (new WaveMoney($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
+})->throws(SignatureVerificationException::class);
+
+it('falls back to a 300 second time to live when the configured one is not positive', function () {
+    expect((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 0))->timeToLiveSeconds)->toBe(300)
+        ->and(WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => '-5'])->timeToLiveSeconds)->toBe(300)
+        ->and((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 600))->timeToLiveSeconds)->toBe(600);
+});
+
+it('generates a merchant reference id when an empty one is given', function () {
+    $data = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WaveMoneyItem('A', 1000)], merchantReferenceId: '');
+
+    expect($data->merchantReferenceId)->toMatch('/^[0-9a-f]{32}$/');
+});
+
+it('hashes boolean and numeric callback values as their JSON text', function () {
+    $fields = ['status', 'timeToLiveSeconds', 'merchantId', 'orderId', 'amount', 'backendResultUrl', 'merchantReferenceId', 'initiatorMsisdn', 'transactionId', 'paymentRequestId', 'requestTime'];
+    $payload = ['status' => 'PAYMENT_CONFIRMED', 'timeToLiveSeconds' => '300', 'orderId' => '100', 'amount' => '1000.0', 'merchantReferenceId' => 'ref-001', 'initiatorMsisdn' => 'true'];
+    $payload['hashValue'] = hash_hmac('sha256', implode('', array_map(fn ($field) => $payload[$field] ?? 'null', $fields)), 'test-secret');
+    $body = strtr((string) json_encode($payload), ['"timeToLiveSeconds":"300"' => '"timeToLiveSeconds":300', '"amount":"1000.0"' => '"amount":1000.0', '"initiatorMsisdn":"true"' => '"initiatorMsisdn":true']);
+
+    $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(new CallbackRequest($body));
+
+    expect($callback->amount)->toBe('1000.0')->and($callback->isSuccessful())->toBeTrue();
+});

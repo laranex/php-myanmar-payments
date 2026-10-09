@@ -37,7 +37,7 @@ function cyberSourceCallback(array $overrides = []): CallbackRequest
         'transaction_id' => '7000000000000000000000',
         'auth_amount' => '1000.00',
         'req_amount' => '1000.00',
-        'signed_field_names' => 'decision,req_reference_number,transaction_id,auth_amount,signed_field_names',
+        'signed_field_names' => 'decision,req_reference_number,transaction_id,auth_amount,req_amount,signed_field_names',
     ];
     $fields['signature'] = cyberSourceSignature($fields);
 
@@ -116,3 +116,44 @@ it('accepts http URLs; the gateway may still require HTTPS in production', funct
 it('accepts a zero amount, as Secure Acceptance allows', function () {
     expect($this->gateway->initiate(new CyberSourcePaymentData('ORDER-3', Amount::parse('0.00'), 'https://shop.test/cb'))->fields['amount'])->toBe('0.00');
 });
+
+it('reads only signed fields, so unsigned extras cannot change the result', function () {
+    $fields = [
+        'decision' => 'DECLINE',
+        'req_reference_number' => 'ORDER-1',
+        'signed_field_names' => 'decision,req_reference_number,signed_field_names',
+    ];
+    $fields['signature'] = cyberSourceSignature($fields);
+    $fields['auth_amount'] = '999.00';
+    $fields['transaction_id'] = 'forged';
+
+    $callback = $this->gateway->handleCallback(new CallbackRequest(http_build_query($fields)));
+
+    expect($callback->status)->toBe(PaymentStatus::Failed)
+        ->and($callback->amount)->toBeNull()
+        ->and($callback->gatewayReference)->toBeNull()
+        ->and($callback->raw)->not->toHaveKeys(['auth_amount', 'transaction_id'])
+        ->and($callback->raw)->toHaveKey('signature');
+});
+
+it('rejects a callback whose signature or signed values are not strings', function (array $override) {
+    parse_str(cyberSourceCallback()->body, $fields);
+
+    $this->gateway->handleCallback(new CallbackRequest(http_build_query(array_replace($fields, $override))));
+})->with([
+    'signature array' => [['signature' => ['x']]],
+    'signed value array' => [['decision' => ['ACCEPT']]],
+    'signed_field_names array' => [['signed_field_names' => ['decision']]],
+])->throws(SignatureVerificationException::class);
+
+it('rejects a currency or locale followed by a newline', function () {
+    new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cb', currency: "USD\n");
+})->throws(InvalidPaymentDataException::class, 'currency');
+
+it('falls back to req_amount when auth_amount is empty', function () {
+    expect($this->gateway->handleCallback(cyberSourceCallback(['auth_amount' => '', 'decision' => 'DECLINE']))->amount)->toBe('1000.00');
+});
+
+it('requires a currency and a locale', function (string $field) {
+    new CyberSourcePaymentData(...['orderId' => 'ORDER-1', 'amount' => 1000, 'callbackUrl' => 'https://shop.test/cb', $field => '']);
+})->with(['currency', 'locale'])->throws(InvalidPaymentDataException::class);

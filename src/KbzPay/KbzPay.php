@@ -127,7 +127,7 @@ class KbzPay implements PaymentGateway
         $tradeStatus = trim((string) ($response['trade_status'] ?? ''));
 
         return new PaymentStatusResult(
-            orderId: (string) ($response['merch_order_id'] ?? $orderId),
+            orderId: isset($response['merch_order_id']) && (string) $response['merch_order_id'] !== '' ? (string) $response['merch_order_id'] : $orderId,
             status: StatusMap::resolve(self::STATUSES, $tradeStatus),
             gatewayStatus: $tradeStatus,
             gatewayReference: isset($response['mm_order_id']) ? (string) $response['mm_order_id'] : null,
@@ -224,7 +224,7 @@ class KbzPay implements PaymentGateway
             $message = isset($result['msg']) ? (string) $result['msg'] : null;
 
             throw new ApiException(
-                "KBZ Pay {$endpoint} failed".($code ? ": [{$code}] {$message}" : " with HTTP {$response->status}."),
+                "KBZ Pay {$endpoint} failed".($code !== null && $code !== '' ? ": [{$code}] {$message}" : " with HTTP {$response->status}."),
                 gatewayCode: $code,
                 gatewayMessage: $message,
                 httpStatus: $response->status,

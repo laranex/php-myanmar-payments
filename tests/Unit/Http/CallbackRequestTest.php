@@ -52,7 +52,7 @@ it('matches header names case-insensitively and returns null for a missing heade
 });
 
 it('decodes a JSON body, a form body and an empty body', function () {
-    expect((new CallbackRequest('{"a":"1","b":{"c":2}}'))->parsedBody())->toBe(['a' => '1', 'b' => ['c' => 2]])
+    expect((new CallbackRequest('{"a":"1","b":{"c":2}}'))->parsedBody())->toBe(['a' => '1', 'b' => ['c' => '2']])
         ->and((new CallbackRequest('a=1&b[c]=2'))->parsedBody())->toBe(['a' => '1', 'b' => ['c' => '2']])
         ->and((new CallbackRequest("  \n"))->parsedBody())->toBe([])
         ->and((new CallbackRequest('', [], ['q' => '1']))->input())->toBe(['q' => '1']);
@@ -70,5 +70,24 @@ it('builds from an already decoded payload as JSON', function () {
     expect($request->body)->toBe('{"orderId":"ORDER_1","amount":1000}')
         ->and($request->header('Content-Type'))->toBe('application/json')
         ->and($request->header('X-Signature'))->toBe('sig')
-        ->and($request->input())->toBe(['orderId' => 'ORDER_1', 'amount' => 1000]);
+        ->and($request->input())->toBe(['orderId' => 'ORDER_1', 'amount' => '1000']);
+});
+
+it('keeps JSON numbers as their exact text so signatures match what the gateway sent', function () {
+    $body = '{"amount":1000.50,"big":12345678901234567890,"neg":-1.5e3,"zero":0,"flag":true,"none":null,"text":"9.10 \\"q\\"","list":[1,2.0]}';
+
+    expect((new CallbackRequest($body))->parsedBody())->toBe([
+        'amount' => '1000.50',
+        'big' => '12345678901234567890',
+        'neg' => '-1.5e3',
+        'zero' => '0',
+        'flag' => true,
+        'none' => null,
+        'text' => '9.10 "q"',
+        'list' => ['1', '2.0'],
+    ]);
+});
+
+it('falls back to form decoding for a body that is not JSON', function () {
+    expect((new CallbackRequest('{"a":1'))->parsedBody())->toBe(['{"a":1' => '']);
 });

@@ -144,3 +144,20 @@ it('verifies a payload that leaves out fields, as AYA does for wallet payments',
 
     expect($callback->status)->toBe(PaymentStatus::Pending)->and($callback->gatewayReference)->toBe('C17913987426393655');
 });
+
+it('rejects a callback whose payload or checksum is not a string', function (string $field) {
+    $signed = ayaSigned($this->vector['payload'], $this->vector['checksum_string']);
+    $signed[$field] = [$signed[$field]];
+
+    (new AyaPay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($signed));
+})->with(['payload', 'checkSum'])->throws(SignatureVerificationException::class);
+
+it('throws when the enquiry payload checksum does not match', function () {
+    $signed = ayaSigned($this->vector['payload'], $this->vector['checksum_string'], 'another-secret');
+
+    (new AyaPay($this->config, mockHttp(jsonResponse(['status' => '00', 'message' => 'success', 'data' => $signed]))))->status('ORD123456');
+})->throws(SignatureVerificationException::class, 'AYA Pay enquiry response checksum verification failed.');
+
+it('reports the HTTP status when AYA answers without a status code', function () {
+    (new AyaPay($this->config, mockHttp(jsonResponse([], 502))))->services();
+})->throws(ApiException::class, 'AYA Pay services failed with HTTP 502.');

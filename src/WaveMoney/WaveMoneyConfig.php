@@ -23,11 +23,13 @@ final class WaveMoneyConfig
 
     public readonly string $authenticateUrl;
 
+    public readonly int $timeToLiveSeconds;
+
     /**
      * @param  string  $merchantId  The merchant id Wave issued.
      * @param  string  $secretKey  The hash secret key Wave issued.
      * @param  string  $merchantName  Your business name, shown on Wave's payment page.
-     * @param  int  $timeToLiveSeconds  How long the customer has to pay.
+     * @param  int  $timeToLiveSeconds  How long the customer has to pay. Zero or less falls back to 300.
      * @param  bool  $sandbox  Use the test environment instead of production.
      * @param  string|null  $baseUrl  Override the API base URL.
      * @param  string|null  $authenticateUrl  Override the host the customer is redirected to. Wave serves it without the API port.
@@ -36,11 +38,12 @@ final class WaveMoneyConfig
         public readonly string $merchantId,
         public readonly string $secretKey,
         public readonly string $merchantName,
-        public readonly int $timeToLiveSeconds = 300,
+        int $timeToLiveSeconds = 300,
         public readonly bool $sandbox = true,
         ?string $baseUrl = null,
         ?string $authenticateUrl = null,
     ) {
+        $this->timeToLiveSeconds = $timeToLiveSeconds > 0 ? $timeToLiveSeconds : 300;
         $this->baseUrl = rtrim($baseUrl ?? ($sandbox ? self::SANDBOX_URL : self::PRODUCTION_URL), '/');
         $this->authenticateUrl = rtrim($authenticateUrl ?? ($sandbox ? self::SANDBOX_AUTHENTICATE_URL : self::PRODUCTION_AUTHENTICATE_URL), '/');
     }
