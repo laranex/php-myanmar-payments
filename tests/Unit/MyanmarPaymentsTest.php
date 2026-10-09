@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Laranex\PhpMyanmarPayments\AyaPay\AyaPay;
+use Laranex\PhpMyanmarPayments\AyaPay\AyaPayConfig;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSource;
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPay;
@@ -50,3 +51,11 @@ it('reports the missing key for each unconfigured gateway', function (string $me
 it('only complains about a gateway when it is used without configuration', function () {
     (new MyanmarPayments([], mockHttp()))->waveMoney();
 })->throws(ConfigurationException::class, 'wave_money configuration is missing [merchant_id]');
+
+it('reads the sandbox flag from common boolean strings', function (mixed $value, bool $sandbox) {
+    expect(AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's', 'sandbox' => $value])->sandbox)->toBe($sandbox);
+})->with([
+    ['false', false], ['FALSE', false], ['0', false], ['f', false], ['no', false], [' off ', false], [false, false], [0, false],
+    ['true', true], ['1', true], ['t', true], ['yes', true], ['on', true], [true, true],
+    ['', true], [null, true], ['maybe', true],
+]);

@@ -43,14 +43,25 @@ final class Config
         return $value === null || $value === '' ? $default : (int) $value;
     }
 
+    /**
+     * `true`/`1`/`t`/`yes`/`on` and `false`/`0`/`f`/`no`/`off` in any case; anything else is the default.
+     */
     public function bool(string $key, bool $default): bool
     {
         $value = $this->config[$key] ?? null;
 
-        if ($value === null || $value === '') {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (! is_scalar($value)) {
             return $default;
         }
 
-        return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? $default;
+        return match (strtolower(trim((string) $value))) {
+            'true', '1', 't', 'yes', 'on' => true,
+            'false', '0', 'f', 'no', 'off' => false,
+            default => $default,
+        };
     }
 }

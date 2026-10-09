@@ -34,7 +34,8 @@ final class Amount implements Stringable
     /**
      * A decimal amount written as plain digits, e.g. `Amount::parse('1000.50')`.
      *
-     * Signs, exponents, spaces and thousands separators are rejected.
+     * Signs, exponents, spaces and thousands separators are rejected. Leading zeros of the whole part are
+     * removed (`007.50` becomes `7.50`); the fractional digits are kept exactly as given.
      *
      * @throws InvalidPaymentDataException
      */
@@ -44,7 +45,10 @@ final class Amount implements Stringable
             throw new InvalidPaymentDataException(['amount' => "The amount field must be plain digits with an optional decimal part, e.g. 1000 or 1000.50; got [{$amount}]."]);
         }
 
-        return new self($amount);
+        [$whole, $fraction] = explode('.', $amount, 2) + [1 => null];
+        $whole = ltrim($whole, '0') === '' ? '0' : ltrim($whole, '0');
+
+        return new self($fraction === null ? $whole : "{$whole}.{$fraction}");
     }
 
     /**
@@ -56,7 +60,7 @@ final class Amount implements Stringable
     }
 
     /**
-     * The amount exactly as given, e.g. `"1000.50"`.
+     * The amount as given, without leading zeros, e.g. `"1000.50"`.
      */
     public function toString(): string
     {
