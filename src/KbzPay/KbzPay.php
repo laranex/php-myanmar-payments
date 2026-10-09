@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\Acknowledgement;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
@@ -17,7 +18,6 @@ use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
 use Laranex\PhpMyanmarPayments\Results\PaymentStatusResult;
 use Laranex\PhpMyanmarPayments\Results\QrPayment;
 use Laranex\PhpMyanmarPayments\Results\RedirectPayment;
-use Laranex\PhpMyanmarPayments\Support\StatusMap;
 use Psr\Http\Client\ClientInterface;
 
 /**
@@ -34,16 +34,39 @@ class KbzPay implements PaymentGateway
         'ORDER_EXPIRED' => PaymentStatus::Expired,
     ];
 
+    public readonly KbzPayConfig $config;
+
+    /**
+     * KBZ Pay's request signer, for custom calls.
+     */
+    public readonly KbzPaySigner $signer;
+
     private readonly Transport $transport;
 
-    private readonly KbzPaySigner $signer;
-
+    /**
+     * @param  KbzPayConfig|array<string, mixed>  $config  A config object or a `KbzPayConfig::fromArray()` array.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
     public function __construct(
-        public readonly KbzPayConfig $config,
+        KbzPayConfig|array $config,
         ?ClientInterface $httpClient = null,
     ) {
+        $this->config = $config instanceof KbzPayConfig ? $config : KbzPayConfig::fromArray($config);
         $this->transport = new Transport($httpClient);
-        $this->signer = new KbzPaySigner($config->appKey);
+        $this->signer = new KbzPaySigner($this->config->appKey);
+    }
+
+    /**
+     * A gateway configured from the `KBZ_PAY_*` environment variables.
+     *
+     * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
+    public static function fromEnv(?array $env = null, ?ClientInterface $httpClient = null): self
+    {
+        return new self(KbzPayConfig::fromEnv($env), $httpClient);
     }
 
     /**
@@ -128,7 +151,7 @@ class KbzPay implements PaymentGateway
 
         return new PaymentStatusResult(
             orderId: isset($response['merch_order_id']) && (string) $response['merch_order_id'] !== '' ? (string) $response['merch_order_id'] : $orderId,
-            status: StatusMap::resolve(self::STATUSES, $tradeStatus),
+            status: PaymentStatus::resolve(self::STATUSES, $tradeStatus),
             gatewayStatus: $tradeStatus,
             gatewayReference: isset($response['mm_order_id']) ? (string) $response['mm_order_id'] : null,
             amount: isset($response['total_amount']) ? (string) $response['total_amount'] : null,
@@ -154,7 +177,7 @@ class KbzPay implements PaymentGateway
 
         return new PaymentCallback(
             orderId: (string) ($fields['merch_order_id'] ?? ''),
-            status: StatusMap::resolve(self::STATUSES, $tradeStatus),
+            status: PaymentStatus::resolve(self::STATUSES, $tradeStatus),
             gatewayStatus: $tradeStatus,
             gatewayReference: isset($fields['mm_order_id']) ? (string) $fields['mm_order_id'] : null,
             amount: isset($fields['total_amount']) ? (string) $fields['total_amount'] : null,
@@ -224,7 +247,7 @@ class KbzPay implements PaymentGateway
             $message = isset($result['msg']) ? (string) $result['msg'] : null;
 
             throw new ApiException(
-                "KBZ Pay {$endpoint} failed".($code !== null && $code !== '' ? ": [{$code}] {$message}" : " with HTTP {$response->status}."),
+                "KBZ Pay {$endpoint} failed".($code !== null && $code !== '' ? rtrim(": [{$code}] {$message}") : " with HTTP {$response->status}."),
                 gatewayCode: $code,
                 gatewayMessage: $message,
                 httpStatus: $response->status,

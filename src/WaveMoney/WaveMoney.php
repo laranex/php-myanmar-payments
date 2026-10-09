@@ -7,12 +7,13 @@ namespace Laranex\PhpMyanmarPayments\WaveMoney;
 use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 use Laranex\PhpMyanmarPayments\Http\Transport;
 use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
 use Laranex\PhpMyanmarPayments\Results\RedirectPayment;
-use Laranex\PhpMyanmarPayments\Support\StatusMap;
+use Laranex\PhpMyanmarPayments\Support\Json;
 use Psr\Http\Client\ClientInterface;
 
 /**
@@ -30,16 +31,36 @@ class WaveMoney implements PaymentGateway
         'SCHEDULER_TRANSACTION_TIMED_OUT' => PaymentStatus::Expired,
     ];
 
+    public readonly WaveMoneyConfig $config;
+
     private readonly Transport $transport;
 
     private readonly WaveMoneySigner $signer;
 
+    /**
+     * @param  WaveMoneyConfig|array<string, mixed>  $config  A config object or a `WaveMoneyConfig::fromArray()` array.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
     public function __construct(
-        public readonly WaveMoneyConfig $config,
+        WaveMoneyConfig|array $config,
         ?ClientInterface $httpClient = null,
     ) {
+        $this->config = $config instanceof WaveMoneyConfig ? $config : WaveMoneyConfig::fromArray($config);
         $this->transport = new Transport($httpClient);
-        $this->signer = new WaveMoneySigner($config->secretKey);
+        $this->signer = new WaveMoneySigner($this->config->secretKey);
+    }
+
+    /**
+     * A gateway configured from the `WAVE_MONEY_*` environment variables.
+     *
+     * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
+    public static function fromEnv(?array $env = null, ?ClientInterface $httpClient = null): self
+    {
+        return new self(WaveMoneyConfig::fromEnv($env), $httpClient);
     }
 
     /**
@@ -112,7 +133,7 @@ class WaveMoney implements PaymentGateway
 
         return new PaymentCallback(
             orderId: $this->orderId($payload),
-            status: StatusMap::resolve(self::STATUSES, $gatewayStatus),
+            status: PaymentStatus::resolve(self::STATUSES, $gatewayStatus),
             gatewayStatus: $gatewayStatus,
             gatewayReference: isset($payload['transactionId']) ? (string) $payload['transactionId'] : null,
             amount: isset($payload['amount']) ? (string) $payload['amount'] : null,
@@ -136,15 +157,21 @@ class WaveMoney implements PaymentGateway
     private function errorMessage(array $body): string
     {
         if (is_array($body['errors'] ?? null)) {
+            $errors = $body['errors'];
+            $fields = array_map('strval', array_keys($errors));
+            sort($fields, SORT_STRING);
             $messages = [];
 
-            foreach ($body['errors'] as $field => $errors) {
-                $messages[] = $field.': '.implode(' ', (array) $errors);
+            foreach ($fields as $field) {
+                $texts = array_map(Json::scalarString(...), array_filter((array) $errors[$field], is_scalar(...)));
+                $messages[] = $field.': '.implode(' ', $texts);
             }
 
             return implode('; ', $messages);
         }
 
-        return (string) ($body['message'] ?? 'unexpected response');
+        $message = Json::scalarString($body['message'] ?? null);
+
+        return $message !== '' ? $message : 'unexpected response';
     }
 }

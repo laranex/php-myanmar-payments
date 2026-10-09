@@ -23,9 +23,9 @@ it('renders an auto-submitting form with every value escaped', function () {
     $html = (new FormPayment('O1', 'https://pay.test/?a=1&b="2"', ['note' => '<script>"x"</script>', 'amount' => '1000'], 'multipart/form-data'))->toHtml();
 
     expect($html)->toStartWith('<!DOCTYPE html>')
-        ->toContain('action="https://pay.test/?a=1&amp;b=&quot;2&quot;"')
+        ->toContain('action="https://pay.test/?a=1&amp;b=&#34;2&#34;"')
         ->toContain('enctype="multipart/form-data"')
-        ->toContain('name="note" value="&lt;script&gt;&quot;x&quot;&lt;/script&gt;"')
+        ->toContain('name="note" value="&lt;script&gt;&#34;x&#34;&lt;/script&gt;"')
         ->toContain('name="amount" value="1000"')
         ->toContain('document.getElementById("payment-form").submit();')
         ->not->toContain('<script>"x"');
@@ -67,7 +67,7 @@ it('reports success only for the successful status', function () {
     $pending = new PaymentStatusResult('O1', PaymentStatus::Pending, 'WAIT_PAY');
 
     expect($paid->isSuccessful())->toBeTrue()
-        ->and($paid->acknowledgement())->toEqual(new Acknowledgement)
+        ->and($paid->acknowledgement)->toEqual(new Acknowledgement)
         ->and($pending->isSuccessful())->toBeFalse()
         ->and(new PaymentStatusResult('O1', PaymentStatus::Successful, 'PAY_SUCCESS'))->isSuccessful()->toBeTrue();
 });

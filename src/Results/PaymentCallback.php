@@ -21,6 +21,7 @@ final class PaymentCallback
      * @param  string|null  $gatewayReference  The gateway's id for the payment.
      * @param  string|null  $amount  The amount the gateway reports, as it sent it.
      * @param  array<array-key, mixed>  $raw  The verified payload.
+     * @param  Acknowledgement  $acknowledgement  The response to send back so the gateway stops retrying.
      */
     public function __construct(
         public readonly string $orderId,
@@ -29,19 +30,11 @@ final class PaymentCallback
         public readonly ?string $gatewayReference = null,
         public readonly ?string $amount = null,
         public readonly array $raw = [],
-        private readonly Acknowledgement $acknowledgement = new Acknowledgement,
+        public readonly Acknowledgement $acknowledgement = new Acknowledgement,
     ) {}
 
     public function isSuccessful(): bool
     {
         return $this->status === PaymentStatus::Successful;
-    }
-
-    /**
-     * The response to send back so the gateway stops retrying.
-     */
-    public function acknowledgement(): Acknowledgement
-    {
-        return $this->acknowledgement;
     }
 }

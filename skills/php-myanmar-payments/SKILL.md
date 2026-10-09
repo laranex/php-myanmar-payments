@@ -51,13 +51,15 @@ $payments = new MyanmarPayments([
 $kbzPay = $payments->kbzPay(); // also waveMoney(), ayaPay(), yomaMmqr(), cyberSource()
 ```
 
-A missing key throws `ConfigurationException`.
+Or read the same environment variables as the Go, Node and Python SDKs (`KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*`, `YOMA_MMQR_*`, `CYBER_SOURCE_*`) with `MyanmarPayments::fromEnv($env = null, $psr18Client, $psr16Cache)`, `KbzPayConfig::fromEnv()` or `KbzPay::fromEnv()`. Gateways also accept the snake_case array in place of a config object.
+
+A missing or blank credential throws `ConfigurationException` (with `gateway` and `key`).
 
 ## Use
 
 ### Amounts
 
-Pass an `int` (whole kyat) or an `Amount` (`Amount::kyat(1000)`, `Amount::parse('1000.50')`), never a float. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data throws `InvalidPaymentDataException`; read the messages with `errors()`.
+Pass an `int` (whole kyat) or an `Amount` (`Amount::kyat(1000)`, `Amount::parse('1000.50')`), never a float. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data throws `InvalidPaymentDataException`; read the messages with `errors()`. Compare a gateway's amount with `$amount->equals($callback->amount)`.
 
 ### Start a payment
 
@@ -91,7 +93,7 @@ if ($callback->isSuccessful()) {
     // compare $callback->amount with the order, then fulfill $callback->orderId once
 }
 
-$callback->acknowledgement()->send(); // or copy its status, headers and body to your PSR-7 response
+$callback->acknowledgement->send(); // or copy its status, headers and body to your PSR-7 response
 ```
 
 `handleCallback()` throws `SignatureVerificationException` when the signature is wrong. Check AYA's browser return with `$ayaPay->verifyRedirect($request)`. Disable CSRF protection for callback routes.

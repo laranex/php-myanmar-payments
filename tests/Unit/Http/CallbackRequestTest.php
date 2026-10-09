@@ -53,7 +53,7 @@ it('matches header names case-insensitively and returns null for a missing heade
 
 it('decodes a JSON body, a form body and an empty body', function () {
     expect((new CallbackRequest('{"a":"1","b":{"c":2}}'))->parsedBody())->toBe(['a' => '1', 'b' => ['c' => '2']])
-        ->and((new CallbackRequest('a=1&b[c]=2'))->parsedBody())->toBe(['a' => '1', 'b' => ['c' => '2']])
+        ->and((new CallbackRequest('a=1&b[c]=2'))->parsedBody())->toBe(['a' => '1', 'b[c]' => '2'])
         ->and((new CallbackRequest("  \n"))->parsedBody())->toBe([])
         ->and((new CallbackRequest('', [], ['q' => '1']))->input())->toBe(['q' => '1']);
 });
@@ -90,4 +90,15 @@ it('keeps JSON numbers as their exact text so signatures match what the gateway 
 
 it('falls back to form decoding for a body that is not JSON', function () {
     expect((new CallbackRequest('{"a":1'))->parsedBody())->toBe(['{"a":1' => '']);
+});
+
+it('keeps the first value of a repeated form field and the names exactly as sent', function () {
+    expect((new CallbackRequest('a=1&a=2&b.c=x+y&d%20e=%2B&flag&&=empty'))->parsedBody())
+        ->toBe(['a' => '1', 'b.c' => 'x y', 'd e' => '+', 'flag' => '', '' => 'empty']);
+});
+
+it('only decodes a JSON object as JSON', function () {
+    expect((new CallbackRequest('[1,2]'))->parsedBody())->toBe(['[1,2]' => ''])
+        ->and((new CallbackRequest('"text"'))->parsedBody())->toBe(['"text"' => ''])
+        ->and((new CallbackRequest('{}'))->parsedBody())->toBe([]);
 });

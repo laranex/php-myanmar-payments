@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\AyaPay;
 
 use Laranex\PhpMyanmarPayments\Amount;
+use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Support\Validator;
 
 /**
@@ -37,14 +38,24 @@ final class AyaPayPaymentData
     ) {
         $this->amount = Amount::from($amount);
 
+        $this->validate();
+    }
+
+    /**
+     * Check the data against the gateway's documented rules again. The constructor already does.
+     *
+     * @throws InvalidPaymentDataException
+     */
+    public function validate(): void
+    {
         (new Validator)
-            ->required('orderId', $orderId)
-            ->length('orderId', $orderId, 6, 40)
-            ->amount('AYA Pay', $this->amount, maxDecimals: 0)
-            ->required('channel', $channel)
-            ->url('returnUrl', $returnUrl)
-            ->when(count($userRefs) > 5, 'userRefs', 'The userRefs field must not have more than 5 items.')
-            ->when(! array_is_list($userRefs) || array_filter($userRefs, fn (mixed $ref): bool => ! is_string($ref)) !== [], 'userRefs', 'The userRefs field must be a list of strings.')
+            ->required('orderId', $this->orderId)
+            ->length('orderId', $this->orderId, 6, 40)
+            ->amount('AYA Payment Gateway', $this->amount, maxDecimals: 0)
+            ->required('channel', $this->channel)
+            ->url('returnUrl', $this->returnUrl)
+            ->when(count($this->userRefs) > 5, 'userRefs', 'The userRefs field must not have more than 5 items.')
+            ->when(! array_is_list($this->userRefs) || array_filter($this->userRefs, fn (mixed $ref): bool => ! is_string($ref)) !== [], 'userRefs', 'The userRefs field must be a list of strings.')
             ->validate();
     }
 }

@@ -62,26 +62,18 @@ final class Validator
      *
      * @param  int|null  $maxDecimals  Decimal places the gateway accepts; 0 means whole amounts only, null means any.
      */
-    public function amount(string $gateway, Amount $amount, ?int $maxDecimals, bool $allowZero = false, ?int $maxLength = null): self
+    public function amount(string $gateway, Amount $amount, ?int $maxDecimals, bool $allowZero = false, ?int $maxLength = null, string $field = 'amount'): self
     {
-        if ($maxDecimals === 0 && $amount->decimalPlaces() > 0) {
-            $this->fail('amount', "{$gateway} does not accept decimal amounts.");
+        $places = $amount->decimalPlaces();
 
-            return $this;
-        }
-
-        if ($maxDecimals !== null && $amount->decimalPlaces() > $maxDecimals) {
-            $this->fail('amount', "{$gateway} accepts at most {$maxDecimals} decimal places.");
-
-            return $this;
-        }
-
-        if (! $allowZero && $amount->isZero()) {
-            $this->fail('amount', 'The amount field must be greater than 0.');
-        }
-
-        if ($maxLength !== null && strlen($amount->toString()) > $maxLength) {
-            $this->fail('amount', "The amount field must not be greater than {$maxLength} characters.");
+        if ($maxDecimals === 0 && $places > 0) {
+            $this->fail($field, "{$gateway} does not accept decimal amounts; the {$field} field must be a whole number.");
+        } elseif ($maxDecimals !== null && $places > $maxDecimals) {
+            $this->fail($field, "{$gateway} accepts at most {$maxDecimals} decimal places; the {$field} field has {$places}.");
+        } elseif (! $allowZero && $amount->isZero()) {
+            $this->fail($field, "The {$field} field must be greater than 0.");
+        } elseif ($maxLength !== null && strlen($amount->toString()) > $maxLength) {
+            $this->fail($field, "The {$field} field must not be greater than {$maxLength} characters.");
         }
 
         return $this;

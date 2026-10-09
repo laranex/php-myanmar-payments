@@ -9,8 +9,19 @@ namespace Laranex\PhpMyanmarPayments\Exceptions;
  */
 class ConfigurationException extends PaymentException
 {
+    /**
+     * @param  string  $gateway  The gateway, e.g. `kbz_pay`.
+     * @param  string  $key  The missing setting, e.g. `app_key`.
+     */
+    public function __construct(
+        public readonly string $gateway,
+        public readonly string $key,
+    ) {
+        parent::__construct("The {$gateway} configuration is missing [{$key}].");
+    }
+
     public static function missing(string $gateway, string $key): self
     {
-        return new self("The {$gateway} configuration is missing [{$key}].");
+        return new self($gateway, $key);
     }
 }

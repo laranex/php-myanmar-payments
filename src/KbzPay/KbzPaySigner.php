@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\KbzPay;
 
+use Laranex\PhpMyanmarPayments\Support\Json;
+
 /**
  * KBZ Pay's signature: every non-empty scalar field except `sign` and `sign_type`, sorted by key,
- * joined as raw `key=value` pairs, with `&key=<app key>` appended, hashed with SHA256 and uppercased.
- *
- * @internal
+ * joined as raw `key=value` pairs (not URL-encoded), with `&key=<app key>` appended, hashed with SHA256 and
+ * uppercased. Numbers sign as the exact text sent and booleans as `true` / `false`.
  */
 final class KbzPaySigner
 {
@@ -30,7 +31,7 @@ final class KbzPaySigner
     public function verify(array $fields): bool
     {
         foreach ($fields as $value) {
-            if ($value !== null && ! is_scalar($value)) {
+            if (Json::isNested($value)) {
                 return false;
             }
         }
@@ -47,14 +48,16 @@ final class KbzPaySigner
     {
         unset($fields['sign'], $fields['sign_type']);
 
-        $fields = array_filter($fields, fn (mixed $value): bool => is_scalar($value) && (string) $value !== '');
+        $pairs = [];
 
-        ksort($fields, SORT_STRING);
+        foreach ($fields as $key => $value) {
+            if (is_scalar($value) && Json::scalarString($value) !== '') {
+                $pairs[(string) $key] = Json::scalarString($value);
+            }
+        }
 
-        return implode('&', array_map(
-            fn (string $key, mixed $value): string => $key.'='.(is_bool($value) ? ($value ? 'true' : 'false') : $value),
-            array_keys($fields),
-            $fields,
-        ));
+        ksort($pairs, SORT_STRING);
+
+        return implode('&', array_map(fn (string $key, string $value): string => "{$key}={$value}", array_keys($pairs), $pairs));
     }
 }

@@ -20,27 +20,57 @@ final class Config
 
     public function required(string $key): string
     {
-        $value = $this->config[$key] ?? null;
+        $value = $this->string($key);
 
-        if ($value === null || $value === '') {
+        if ($value === null) {
             throw ConfigurationException::missing($this->gateway, $key);
         }
 
-        return (string) $value;
+        return $value;
     }
 
+    /**
+     * The value as a string, or the default when it is missing, blank or not a scalar.
+     */
     public function string(string $key, ?string $default = null): ?string
     {
         $value = $this->config[$key] ?? null;
 
-        return $value === null || $value === '' ? $default : (string) $value;
+        return is_scalar($value) && ! is_bool($value) && trim((string) $value) !== '' ? (string) $value : $default;
     }
 
+    /**
+     * An integer or integer text such as `"300"`; anything else is the default.
+     */
     public function int(string $key, int $default): int
     {
         $value = $this->config[$key] ?? null;
 
-        return $value === null || $value === '' ? $default : (int) $value;
+        if (is_int($value)) {
+            return $value;
+        }
+
+        return is_string($value) && preg_match('/^[+-]?[0-9]+\z/', trim($value)) === 1 ? (int) trim($value) : $default;
+    }
+
+    /**
+     * A credential the constructor was given: blank after trimming means missing.
+     */
+    public static function requireValue(string $gateway, string $key, string $value): string
+    {
+        if (trim($value) === '') {
+            throw ConfigurationException::missing($gateway, $key);
+        }
+
+        return $value;
+    }
+
+    /**
+     * An optional override: blank means unset.
+     */
+    public static function optionalValue(?string $value): ?string
+    {
+        return $value === null || trim($value) === '' ? null : $value;
     }
 
     /**

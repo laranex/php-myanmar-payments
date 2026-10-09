@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\Http;
 
+use Laranex\PhpMyanmarPayments\Support\Form;
 use Laranex\PhpMyanmarPayments\Support\Json;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -99,7 +100,18 @@ final class CallbackRequest
     }
 
     /**
-     * The body decoded as JSON or as a urlencoded form. JSON numbers keep their exact text, as strings.
+     * The query string merged over the parsed body, e.g. for a browser return whose query string is signed.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function queryInput(): array
+    {
+        return $this->query + $this->parsedBody();
+    }
+
+    /**
+     * The body decoded as a JSON object or as a urlencoded form. JSON numbers keep their exact text, as
+     * strings. In a form, the first value of a repeated name wins and names are kept exactly as sent.
      *
      * @return array<array-key, mixed>
      */
@@ -117,8 +129,6 @@ final class CallbackRequest
             return $json;
         }
 
-        parse_str($body, $form);
-
-        return $form;
+        return Form::decode($body);
     }
 }

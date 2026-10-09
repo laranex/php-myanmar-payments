@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\CyberSource;
 
 use Laranex\PhpMyanmarPayments\Amount;
+use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Support\Validator;
 
 /**
@@ -18,14 +19,24 @@ final class CyberSourcePaymentData
     public readonly Amount $amount;
 
     /**
+     * ISO 4217 currency code in use.
+     */
+    public readonly string $currency;
+
+    /**
+     * Language of the hosted page in use.
+     */
+    public readonly string $locale;
+
+    /**
      * @param  string  $orderId  Your order id (`reference_number`), at most 50 characters. Echoed back as `req_reference_number`.
      * @param  Amount|int  $amount  Order total in `$currency`, e.g. `Amount::parse('10.50')`. Decimals allowed, at most 15 characters.
      * @param  string  $callbackUrl  URL CyberSource posts the result to (`override_backoffice_post_url`), at most 255 characters.
      * @param  string|null  $returnUrl  Receipt page the customer is sent to (`override_custom_receipt_page`), at most 255 characters.
      * @param  string|null  $cancelUrl  Page the customer is sent to on cancel (`override_custom_cancel_page`), at most 255 characters.
-     * @param  string  $currency  ISO 4217 currency code.
+     * @param  string  $currency  ISO 4217 currency code. Blank means `MMK`.
      * @param  CyberSourceTransactionType  $transactionType  What CyberSource does with the card.
-     * @param  string  $locale  Language of the hosted page, e.g. `en-us`.
+     * @param  string  $locale  Language of the hosted page, e.g. `en-us`. Blank means `en-us`.
      */
     public function __construct(
         public readonly string $orderId,
@@ -33,27 +44,37 @@ final class CyberSourcePaymentData
         public readonly string $callbackUrl,
         public readonly ?string $returnUrl = null,
         public readonly ?string $cancelUrl = null,
-        public readonly string $currency = 'MMK',
+        string $currency = 'MMK',
         public readonly CyberSourceTransactionType $transactionType = CyberSourceTransactionType::Sale,
-        public readonly string $locale = 'en-us',
+        string $locale = 'en-us',
     ) {
         $this->amount = Amount::from($amount);
+        $this->currency = $currency === '' ? 'MMK' : $currency;
+        $this->locale = $locale === '' ? 'en-us' : $locale;
 
+        $this->validate();
+    }
+
+    /**
+     * Check the data against the gateway's documented rules again. The constructor already does.
+     *
+     * @throws InvalidPaymentDataException
+     */
+    public function validate(): void
+    {
         (new Validator)
-            ->required('orderId', $orderId)
-            ->max('orderId', $orderId, 50)
+            ->required('orderId', $this->orderId)
+            ->max('orderId', $this->orderId, 50)
             ->amount('CyberSource', $this->amount, maxDecimals: null, allowZero: true, maxLength: 15)
-            ->required('callbackUrl', $callbackUrl)
-            ->url('callbackUrl', $callbackUrl)
-            ->max('callbackUrl', $callbackUrl, 255)
-            ->url('returnUrl', $returnUrl)
-            ->max('returnUrl', $returnUrl, 255)
-            ->url('cancelUrl', $cancelUrl)
-            ->max('cancelUrl', $cancelUrl, 255)
-            ->required('currency', $currency)
-            ->pattern('currency', $currency, '/^[A-Z]{3}\z/', 'a three letter ISO 4217 code')
-            ->required('locale', $locale)
-            ->pattern('locale', $locale, '/^[a-z]{2}-[a-z]{2}\z/', 'a locale code such as en-us')
+            ->required('callbackUrl', $this->callbackUrl)
+            ->url('callbackUrl', $this->callbackUrl)
+            ->max('callbackUrl', $this->callbackUrl, 255)
+            ->url('returnUrl', $this->returnUrl)
+            ->max('returnUrl', $this->returnUrl, 255)
+            ->url('cancelUrl', $this->cancelUrl)
+            ->max('cancelUrl', $this->cancelUrl, 255)
+            ->pattern('currency', $this->currency, '/^[A-Z]{3}\z/', 'a three letter ISO 4217 code')
+            ->pattern('locale', $this->locale, '/^[a-z]{2}-[a-z]{2}\z/', 'a locale code such as en-us')
             ->validate();
     }
 }

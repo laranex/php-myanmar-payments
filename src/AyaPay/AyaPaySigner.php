@@ -27,6 +27,27 @@ final class AyaPaySigner
     public function __construct(private readonly string $appSecret) {}
 
     /**
+     * Standard base64, either correctly padded or without padding. Anything else (partial padding, the URL-safe
+     * alphabet, whitespace) is rejected, and so is a payload that is not UTF-8.
+     */
+    private static function decodeBase64(string $value): ?string
+    {
+        if (preg_match('/^[A-Za-z0-9+\/]+={0,2}\z/', $value) !== 1) {
+            return null;
+        }
+
+        $padded = str_contains($value, '=');
+
+        if (($padded && strlen($value) % 4 !== 0) || (! $padded && strlen($value) % 4 === 1)) {
+            return null;
+        }
+
+        $decoded = base64_decode($value, true);
+
+        return $decoded === false || preg_match('//u', $decoded) !== 1 ? null : $decoded;
+    }
+
+    /**
      * @param  list<scalar|null>  $values
      */
     public function checksum(array $values): string
@@ -41,10 +62,10 @@ final class AyaPaySigner
      */
     public function verifyPayload(string $payload, string $checkSum): ?array
     {
-        $json = base64_decode($payload, true);
-        $decoded = $json === false ? null : Json::decode($json);
+        $json = self::decodeBase64($payload);
+        $decoded = $json === null ? null : Json::decode($json);
 
-        if (! is_array($decoded)) {
+        if ($decoded === null) {
             return null;
         }
 
@@ -53,9 +74,15 @@ final class AyaPaySigner
         foreach (self::PAYLOAD_FIELDS as $field) {
             $key = $field === 'currencyCode' && array_key_exists('currenyCode', $decoded) ? 'currenyCode' : $field;
 
-            if (array_key_exists($key, $decoded)) {
-                $values[] = is_scalar($decoded[$key]) ? $decoded[$key] : null;
+            if (! array_key_exists($key, $decoded)) {
+                continue;
             }
+
+            if (Json::isNested($decoded[$key])) {
+                return null;
+            }
+
+            $values[] = $decoded[$key];
         }
 
         return hash_equals($this->checksum($values), strtolower($checkSum)) ? $decoded : null;

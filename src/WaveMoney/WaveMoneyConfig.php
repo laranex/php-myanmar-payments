@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\WaveMoney;
 
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Support\Config;
+use Laranex\PhpMyanmarPayments\Support\Env;
 
 /**
  * Credentials and endpoints for Wave Money (WavePay payment gateway).
@@ -33,6 +35,8 @@ final class WaveMoneyConfig
      * @param  bool  $sandbox  Use the test environment instead of production.
      * @param  string|null  $baseUrl  Override the API base URL.
      * @param  string|null  $authenticateUrl  Override the host the customer is redirected to. Wave serves it without the API port.
+     *
+     * @throws ConfigurationException When a credential is blank.
      */
     public function __construct(
         public readonly string $merchantId,
@@ -43,13 +47,19 @@ final class WaveMoneyConfig
         ?string $baseUrl = null,
         ?string $authenticateUrl = null,
     ) {
+        Config::requireValue('wave_money', 'merchant_id', $merchantId);
+        Config::requireValue('wave_money', 'secret_key', $secretKey);
+        Config::requireValue('wave_money', 'merchant_name', $merchantName);
+
         $this->timeToLiveSeconds = $timeToLiveSeconds > 0 ? $timeToLiveSeconds : 300;
-        $this->baseUrl = rtrim($baseUrl ?? ($sandbox ? self::SANDBOX_URL : self::PRODUCTION_URL), '/');
-        $this->authenticateUrl = rtrim($authenticateUrl ?? ($sandbox ? self::SANDBOX_AUTHENTICATE_URL : self::PRODUCTION_AUTHENTICATE_URL), '/');
+        $this->baseUrl = rtrim(Config::optionalValue($baseUrl) ?? ($sandbox ? self::SANDBOX_URL : self::PRODUCTION_URL), '/');
+        $this->authenticateUrl = rtrim(Config::optionalValue($authenticateUrl) ?? ($sandbox ? self::SANDBOX_AUTHENTICATE_URL : self::PRODUCTION_AUTHENTICATE_URL), '/');
     }
 
     /**
-     * @param  array{merchant_id?: string, secret_key?: string, merchant_name?: string, time_to_live_in_seconds?: int|string, sandbox?: bool|string, base_url?: string, authenticate_url?: string}  $config
+     * @param  array{merchant_id?: string|null, secret_key?: string|null, merchant_name?: string|null, time_to_live_in_seconds?: int|string|null, sandbox?: bool|string|null, base_url?: string|null, authenticate_url?: string|null}  $config
+     *
+     * @throws ConfigurationException When a credential is missing.
      */
     public static function fromArray(array $config): self
     {
@@ -64,5 +74,28 @@ final class WaveMoneyConfig
             baseUrl: $config->string('base_url'),
             authenticateUrl: $config->string('authenticate_url'),
         );
+    }
+
+    /**
+     * Read `WAVE_MONEY_MERCHANT_ID`, `WAVE_MONEY_SECRET_KEY`, `WAVE_MONEY_MERCHANT_NAME` (falling back to `APP_NAME`),
+     * `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS`, `WAVE_MONEY_SANDBOX`, `WAVE_MONEY_BASE_URL` and `WAVE_MONEY_AUTHENTICATE_URL`.
+     *
+     * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
+    public static function fromEnv(?array $env = null): self
+    {
+        $env = new Env($env);
+
+        return self::fromArray([
+            'merchant_id' => $env->first('WAVE_MONEY_MERCHANT_ID'),
+            'secret_key' => $env->first('WAVE_MONEY_SECRET_KEY'),
+            'merchant_name' => $env->first('WAVE_MONEY_MERCHANT_NAME', 'APP_NAME'),
+            'time_to_live_in_seconds' => $env->first('WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS'),
+            'sandbox' => $env->first('WAVE_MONEY_SANDBOX'),
+            'base_url' => $env->first('WAVE_MONEY_BASE_URL'),
+            'authenticate_url' => $env->first('WAVE_MONEY_AUTHENTICATE_URL'),
+        ]);
     }
 }
