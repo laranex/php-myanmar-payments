@@ -12,6 +12,7 @@ use Laranex\PhpMyanmarPayments\Support\ArrayCache;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqr;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrConfig;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrPaymentData;
+use Psr\SimpleCache\CacheInterface;
 
 beforeEach(function () {
     $this->config = new YomaMmqrConfig(merchantId: 'M001', clientId: 'client', clientSecret: 'secret', webhookHashKey: 'hash-key');
@@ -147,3 +148,83 @@ it('forgets the cached token so the next call authenticates again', function () 
         ->and((string) $requests[2]->getUri())->toBe('https://devapi.yomabank.net/token')
         ->and($requests[3]->getHeaderLine('Authorization'))->toBe('Bearer token-2');
 });
+
+it('rejects a callback whose fields are not strings', function (array $payload) {
+    (new YomaMmqr($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
+})->with([
+    'order number array' => [['orderNumber' => ['ORD-1'], 'status' => 'success', 'hashValue' => 'x']],
+    'hash array' => [['orderNumber' => 'ORD-1', 'status' => 'success', 'hashValue' => ['x']]],
+    'missing order number' => [['status' => 'success', 'hashValue' => hash_hmac('sha256', 'orderNumber=&status=success', 'hash-key')]],
+])->throws(SignatureVerificationException::class);
+
+it('throws when the token request fails', function () {
+    (new YomaMmqr($this->config, mockHttp(jsonResponse(['error' => 'invalid_client', 'error_description' => 'Client authentication failed'], 401))))
+        ->status('REF-1');
+})->throws(ApiException::class, 'Yoma MMQR token failed: [invalid_client] Client authentication failed');
+
+it('caches the token for its lifetime minus a minute, assuming an hour when Yoma sends none', function (mixed $expiresIn, int $ttl) {
+    $cache = new class implements CacheInterface
+    {
+        public mixed $ttl = null;
+
+        public function get(string $key, mixed $default = null): mixed
+        {
+            return $default;
+        }
+
+        public function set(string $key, mixed $value, null|int|DateInterval $ttl = null): bool
+        {
+            $this->ttl = $ttl;
+
+            return true;
+        }
+
+        public function delete(string $key): bool
+        {
+            return true;
+        }
+
+        public function clear(): bool
+        {
+            return true;
+        }
+
+        public function getMultiple(iterable $keys, mixed $default = null): iterable
+        {
+            return [];
+        }
+
+        public function setMultiple(iterable $values, null|int|DateInterval $ttl = null): bool
+        {
+            return true;
+        }
+
+        public function deleteMultiple(iterable $keys): bool
+        {
+            return true;
+        }
+
+        public function has(string $key): bool
+        {
+            return false;
+        }
+    };
+
+    $http = mockHttp(
+        jsonResponse(['access_token' => 'token-1', 'expires_in' => $expiresIn]),
+        jsonResponse(['refLabel' => '1', 'paymentStatus' => 'PENDING', 'errorCode' => null]),
+    );
+
+    (new YomaMmqr($this->config, $http, $cache))->status('1');
+
+    expect($cache->ttl)->toBe($ttl);
+})->with([
+    [28800, 28740],
+    [0, 3540],
+    [null, 3540],
+    [30, 60],
+]);
+
+it('rejects a QR response with an empty reference', function () {
+    (new YomaMmqr($this->config, mockHttp(tokenResponse(), jsonResponse(['refLabel' => '', 'qrString' => 'a', 'errorCode' => null]))))->renewQr('ORD-1');
+})->throws(ApiException::class, 'Yoma MMQR did not return a QR.');

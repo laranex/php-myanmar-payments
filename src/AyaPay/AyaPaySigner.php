@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\AyaPay;
 
+use Laranex\PhpMyanmarPayments\Support\Json;
+
 /**
- * AYA's checksums: HMAC-SHA256 with the app secret over values joined with ":", in an order fixed by the spec.
+ * AYA's checksums: HMAC-SHA256 with the app secret over values joined with ":", in an order fixed by the spec. Booleans sign as `true` / `false`.
  *
  * @internal
  */
@@ -29,7 +31,7 @@ final class AyaPaySigner
      */
     public function checksum(array $values): string
     {
-        return hash_hmac('sha256', implode(':', array_map(fn (mixed $value): string => (string) $value, $values)), $this->appSecret);
+        return hash_hmac('sha256', implode(':', array_map(Json::scalarString(...), $values)), $this->appSecret);
     }
 
     /**
@@ -40,7 +42,7 @@ final class AyaPaySigner
     public function verifyPayload(string $payload, string $checkSum): ?array
     {
         $json = base64_decode($payload, true);
-        $decoded = $json === false ? null : json_decode($json, true);
+        $decoded = $json === false ? null : Json::decode($json);
 
         if (! is_array($decoded)) {
             return null;

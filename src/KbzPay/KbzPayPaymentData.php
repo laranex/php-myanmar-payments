@@ -38,7 +38,7 @@ final class KbzPayPaymentData
         (new Validator)
             ->required('orderId', $orderId)
             ->max('orderId', $orderId, 40)
-            ->pattern('orderId', $orderId, '/^[A-Za-z0-9_]+$/', 'letters, numbers and underscores')
+            ->pattern('orderId', $orderId, '/^[A-Za-z0-9_]+\z/', 'letters, numbers and underscores')
             ->amount('KBZ Pay', $this->amount, maxDecimals: 2)
             ->required('callbackUrl', $callbackUrl)
             ->url('callbackUrl', $callbackUrl)

@@ -40,7 +40,7 @@ final class Amount implements Stringable
      */
     public static function parse(string $amount): self
     {
-        if (preg_match('/^\d+(\.\d+)?$/', $amount) !== 1) {
+        if (preg_match('/^\d+(\.\d+)?\z/', $amount) !== 1) {
             throw new InvalidPaymentDataException(['amount' => "The amount field must be plain digits with an optional decimal part, e.g. 1000 or 1000.50; got [{$amount}]."]);
         }
 

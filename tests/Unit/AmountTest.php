@@ -26,7 +26,7 @@ it('parses plain decimal strings exactly as given', function (string $input, int
 
 it('rejects anything that is not plain digits', function (string $input) {
     Amount::parse($input);
-})->with(['1e5', '-1', '1,000', ' 10', '10 ', '10.', '.5', '', 'abc', '+10', '0x10'])
+})->with(['1e5', '-1', '1,000', ' 10', '10 ', '10.', '.5', '', 'abc', '+10', '0x10', "10\n", "10.5\n"])
     ->throws(InvalidPaymentDataException::class, 'plain digits');
 
 it('builds whole amounts from integers', function () {

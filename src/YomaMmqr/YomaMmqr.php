@@ -86,7 +86,7 @@ class YomaMmqr implements PaymentGateway
             'orderNumber' => $orderId,
         ]);
 
-        if (! is_string($body['qrString'] ?? null) || $body['qrString'] === '' || ! isset($body['refLabel'])) {
+        if (! is_string($body['qrString'] ?? null) || $body['qrString'] === '' || ! is_scalar($body['refLabel'] ?? null) || (string) $body['refLabel'] === '') {
             throw new ApiException('Yoma MMQR did not return a QR.', raw: $body);
         }
 
@@ -145,11 +145,12 @@ class YomaMmqr implements PaymentGateway
             throw new SignatureVerificationException('Yoma MMQR callback has a missing or wrong X-Webhook-Secret header.', $payload);
         }
 
-        $orderNumber = (string) ($payload['orderNumber'] ?? '');
-        $status = trim((string) ($payload['status'] ?? ''));
+        $orderNumber = is_scalar($payload['orderNumber'] ?? null) ? (string) $payload['orderNumber'] : '';
+        $status = is_scalar($payload['status'] ?? null) ? trim((string) $payload['status']) : '';
+        $hashValue = is_string($payload['hashValue'] ?? null) ? strtolower($payload['hashValue']) : '';
         $expected = hash_hmac('sha256', "orderNumber={$orderNumber}&status={$status}", $orderNumber.$this->config->webhookHashKey);
 
-        if ($orderNumber === '' || ! hash_equals($expected, strtolower((string) ($payload['hashValue'] ?? '')))) {
+        if ($orderNumber === '' || ! hash_equals($expected, $hashValue)) {
             throw new SignatureVerificationException('Yoma MMQR callback hash verification failed.', $payload);
         }
 
@@ -213,7 +214,8 @@ class YomaMmqr implements PaymentGateway
             $this->fail('token', $response, $body, isset($body['error']) ? (string) $body['error'] : null);
         }
 
-        $this->cache->set($this->tokenCacheKey(), $token, max(60, (int) ($body['expires_in'] ?? 3600) - 60));
+        $expiresIn = (int) ($body['expires_in'] ?? 0);
+        $this->cache->set($this->tokenCacheKey(), $token, max(60, ($expiresIn > 0 ? $expiresIn : 3600) - 60));
 
         return $token;
     }
@@ -231,7 +233,7 @@ class YomaMmqr implements PaymentGateway
         $message = isset($body['errorDescription']) ? (string) $body['errorDescription'] : (isset($body['error_description']) ? (string) $body['error_description'] : null);
 
         throw new ApiException(
-            "Yoma MMQR {$endpoint} failed".($errorCode ? ": [{$errorCode}] {$message}" : " with HTTP {$response->status}."),
+            "Yoma MMQR {$endpoint} failed".($errorCode !== null && $errorCode !== '' ? ": [{$errorCode}] {$message}" : " with HTTP {$response->status}."),
             gatewayCode: $errorCode,
             gatewayMessage: $message,
             httpStatus: $response->status,

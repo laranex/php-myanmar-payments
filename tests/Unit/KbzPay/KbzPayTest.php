@@ -199,3 +199,29 @@ it('accepts up to two decimal places, as KBZ documents', function () {
 
     new KbzPayPaymentData('ORDER_1', Amount::parse('1000.505'), 'https://shop.test/cb');
 })->throws(InvalidPaymentDataException::class, 'KBZ Pay accepts at most 2 decimal places.');
+
+it('rejects a callback that carries nested values', function () {
+    $request = signedCallback($this->signer, ['merch_order_id' => 'ORDER_1', 'total_amount' => '1000', 'trade_status' => 'PAY_SUCCESS']);
+    $payload = $request->parsedBody();
+    $payload['Request']['mm_order_id'] = ['forged'];
+
+    (new KbzPay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
+})->throws(SignatureVerificationException::class);
+
+it('includes a "0" error code in the exception message', function () {
+    (new KbzPay($this->config, mockHttp(jsonResponse(['Response' => ['result' => 'FAIL', 'code' => '0', 'msg' => 'odd']]))))->status('ORDER_1');
+})->throws(ApiException::class, 'KBZ Pay queryorder failed: [0] odd');
+
+it('rejects an order id followed by a newline', function () {
+    new KbzPayPaymentData(orderId: "ORDER_1\n", amount: 1000, callbackUrl: 'https://shop.test/kbz/callback');
+})->throws(InvalidPaymentDataException::class, 'orderId');
+
+it('verifies a callback whose amount is a JSON number against its exact text', function () {
+    $fields = ['merch_order_id' => 'ORDER_1', 'total_amount' => '1000.50', 'trade_status' => 'PAY_SUCCESS', 'sign_type' => 'SHA256'];
+    $fields['sign'] = $this->signer->sign($fields);
+    $body = str_replace('"total_amount":"1000.50"', '"total_amount":1000.50', (string) json_encode(['Request' => $fields]));
+
+    $callback = (new KbzPay($this->config, mockHttp()))->handleCallback(new CallbackRequest($body));
+
+    expect($callback->amount)->toBe('1000.50')->and($callback->isSuccessful())->toBeTrue();
+});

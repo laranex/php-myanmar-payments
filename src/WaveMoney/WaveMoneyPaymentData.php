@@ -30,7 +30,7 @@ final class WaveMoneyPaymentData
      * @param  string  $description  Payment description shown to the customer.
      * @param  list<WaveMoneyItem>  $items  Line items shown on Wave's page.
      * @param  Amount|int|null  $amount  Total in whole kyat, e.g. `Amount::kyat(1000)`. Defaults to the sum of the items. Wave does not accept decimals.
-     * @param  string|null  $merchantReferenceId  Unique id of this attempt. Defaults to a random id.
+     * @param  string|null  $merchantReferenceId  Unique id of this attempt. Defaults to a random id when null or empty.
      */
     public function __construct(
         public readonly string $orderId,
@@ -42,7 +42,7 @@ final class WaveMoneyPaymentData
         ?string $merchantReferenceId = null,
     ) {
         $this->amount = $amount === null ? self::sumOf($items) : Amount::from($amount);
-        $this->merchantReferenceId = $merchantReferenceId ?? bin2hex(random_bytes(16));
+        $this->merchantReferenceId = $merchantReferenceId === null || $merchantReferenceId === '' ? bin2hex(random_bytes(16)) : $merchantReferenceId;
 
         (new Validator)
             ->required('orderId', $orderId)

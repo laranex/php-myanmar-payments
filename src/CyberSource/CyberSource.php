@@ -66,6 +66,8 @@ class CyberSource implements PaymentGateway
     /**
      * Verify CyberSource's result post. The same check works for the browser post to your receipt page.
      *
+     * Only the fields listed in `signed_field_names` are read, so unsigned extra fields can't change the result.
+     *
      * @throws SignatureVerificationException
      */
     public function handleCallback(CallbackRequest $request): PaymentCallback
@@ -73,19 +75,20 @@ class CyberSource implements PaymentGateway
         $payload = $request->input();
         $expected = $this->sign($payload);
 
-        if ($expected === null || ! hash_equals($expected, (string) ($payload['signature'] ?? ''))) {
+        if ($expected === null || ! is_string($payload['signature'] ?? null) || ! hash_equals($expected, $payload['signature'])) {
             throw new SignatureVerificationException('CyberSource callback signature verification failed.', $payload);
         }
 
-        $decision = strtoupper(trim((string) ($payload['decision'] ?? '')));
+        $signed = array_intersect_key($payload, array_flip($this->signedFieldNames($payload)));
+        $decision = strtoupper(trim((string) ($signed['decision'] ?? '')));
 
         return new PaymentCallback(
-            orderId: (string) ($payload['req_reference_number'] ?? ''),
+            orderId: (string) ($signed['req_reference_number'] ?? ''),
             status: StatusMap::resolve(self::STATUSES, $decision),
             gatewayStatus: $decision,
-            gatewayReference: isset($payload['transaction_id']) ? (string) $payload['transaction_id'] : null,
-            amount: isset($payload['auth_amount']) ? (string) $payload['auth_amount'] : (isset($payload['req_amount']) ? (string) $payload['req_amount'] : null),
-            raw: $payload,
+            gatewayReference: isset($signed['transaction_id']) ? (string) $signed['transaction_id'] : null,
+            amount: $this->amount($signed),
+            raw: $signed + ['signature' => $payload['signature']],
         );
     }
 
@@ -96,7 +99,7 @@ class CyberSource implements PaymentGateway
      */
     private function sign(array $fields): ?string
     {
-        $names = array_filter(explode(',', (string) ($fields['signed_field_names'] ?? '')));
+        $names = $this->signedFieldNames($fields);
 
         if ($names === []) {
             return null;
@@ -113,5 +116,32 @@ class CyberSource implements PaymentGateway
         }
 
         return base64_encode(hash_hmac('sha256', implode(',', $pairs), $this->config->secretKey, true));
+    }
+
+    /**
+     * `auth_amount`, falling back to `req_amount` when it is missing or empty.
+     *
+     * @param  array<array-key, mixed>  $fields
+     */
+    private function amount(array $fields): ?string
+    {
+        foreach (['auth_amount', 'req_amount'] as $field) {
+            if (isset($fields[$field]) && (string) $fields[$field] !== '') {
+                return (string) $fields[$field];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $fields
+     * @return list<string>
+     */
+    private function signedFieldNames(array $fields): array
+    {
+        $names = $fields['signed_field_names'] ?? null;
+
+        return is_string($names) ? array_values(array_filter(explode(',', $names), fn (string $name): bool => $name !== '')) : [];
     }
 }

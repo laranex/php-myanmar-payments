@@ -63,7 +63,7 @@ class AyaPay implements PaymentGateway
         $services = [];
 
         foreach ((array) ($body['data'] ?? []) as $service) {
-            if (! is_array($service) || ! isset($service['key'])) {
+            if (! is_array($service) || ! is_scalar($service['key'] ?? null) || (string) $service['key'] === '') {
                 continue;
             }
 
@@ -188,7 +188,9 @@ class AyaPay implements PaymentGateway
      */
     private function verifiedPayload(array $input, string $context): array
     {
-        $payload = $this->signer->verifyPayload((string) ($input['payload'] ?? ''), (string) ($input['checkSum'] ?? ''));
+        $payload = is_string($input['payload'] ?? null) && is_string($input['checkSum'] ?? null)
+            ? $this->signer->verifyPayload($input['payload'], $input['checkSum'])
+            : null;
 
         if ($payload === null) {
             throw new SignatureVerificationException("AYA Pay {$context} checksum verification failed.", $input);
@@ -209,7 +211,7 @@ class AyaPay implements PaymentGateway
             $message = isset($body['message']) ? (string) $body['message'] : null;
 
             throw new ApiException(
-                "AYA Pay {$endpoint} failed".($status ? ": [{$status}] {$message}" : " with HTTP {$response->status}."),
+                "AYA Pay {$endpoint} failed".($status !== null && $status !== '' ? ": [{$status}] {$message}" : " with HTTP {$response->status}."),
                 gatewayCode: $status,
                 gatewayMessage: $message,
                 httpStatus: $response->status,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\Http;
 
+use Laranex\PhpMyanmarPayments\Support\Json;
 use Psr\Http\Message\ServerRequestInterface;
 
 /**
@@ -98,7 +99,7 @@ final class CallbackRequest
     }
 
     /**
-     * The body decoded as JSON or as a urlencoded form.
+     * The body decoded as JSON or as a urlencoded form. JSON numbers keep their exact text, as strings.
      *
      * @return array<array-key, mixed>
      */
@@ -110,9 +111,9 @@ final class CallbackRequest
             return [];
         }
 
-        $json = json_decode($body, true);
+        $json = Json::decode($body);
 
-        if (is_array($json)) {
+        if ($json !== null) {
             return $json;
         }
 

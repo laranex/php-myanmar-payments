@@ -59,7 +59,7 @@ class WaveMoney implements PaymentGateway
             'amount' => $data->amount->toString(),
             'payment_description' => $data->description,
             'merchant_name' => $this->config->merchantName,
-            'items' => json_encode(array_map(fn (WaveMoneyItem $item): array => $item->toArray(), $data->items), JSON_UNESCAPED_UNICODE),
+            'items' => json_encode(array_map(fn (WaveMoneyItem $item): array => $item->toArray(), $data->items), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             'hash' => $this->signer->requestHash(
                 $this->config->timeToLiveSeconds,
                 $this->config->merchantId,
