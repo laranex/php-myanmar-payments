@@ -223,6 +223,10 @@ it('caches the token for its lifetime minus a minute, assuming an hour when Yoma
     [0, 3540],
     [null, 3540],
     [30, 60],
+    'decimal number' => [28800.0, 28740],
+    'decimal text' => ['28800.5', 28740],
+    'exponent text reads its leading digits' => ['1e5', 60],
+    'text' => ['soon', 3540],
 ]);
 
 it('rejects a QR response with an empty reference', function () {

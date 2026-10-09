@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 use Laranex\PhpMyanmarPayments\Http\HttpResponse;
@@ -16,7 +17,7 @@ use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
 use Laranex\PhpMyanmarPayments\Results\PaymentStatusResult;
 use Laranex\PhpMyanmarPayments\Results\QrPayment;
 use Laranex\PhpMyanmarPayments\Support\ArrayCache;
-use Laranex\PhpMyanmarPayments\Support\StatusMap;
+use Laranex\PhpMyanmarPayments\Support\Json;
 use Psr\Http\Client\ClientInterface;
 use Psr\SimpleCache\CacheInterface;
 
@@ -39,17 +40,43 @@ class YomaMmqr implements PaymentGateway
         'FAIL' => PaymentStatus::Failed,
     ];
 
+    /**
+     * Prefix of the access token's cache key, the same in every Laranex SDK so services in different languages
+     * can share one cache. The key ends with the SHA-256 of `<base url>|<client id>`.
+     */
+    public const TOKEN_CACHE_PREFIX = 'myanmar-payments.yoma-mmqr.token.';
+
+    public readonly YomaMmqrConfig $config;
+
     private readonly Transport $transport;
 
     private readonly CacheInterface $cache;
 
+    /**
+     * @param  YomaMmqrConfig|array<string, mixed>  $config  A config object or a `YomaMmqrConfig::fromArray()` array.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
     public function __construct(
-        public readonly YomaMmqrConfig $config,
+        YomaMmqrConfig|array $config,
         ?ClientInterface $httpClient = null,
         ?CacheInterface $cache = null,
     ) {
+        $this->config = $config instanceof YomaMmqrConfig ? $config : YomaMmqrConfig::fromArray($config);
         $this->transport = new Transport($httpClient);
         $this->cache = $cache ?? new ArrayCache;
+    }
+
+    /**
+     * A gateway configured from the `YOMA_MMQR_*` environment variables.
+     *
+     * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
+    public static function fromEnv(?array $env = null, ?ClientInterface $httpClient = null, ?CacheInterface $cache = null): self
+    {
+        return new self(YomaMmqrConfig::fromEnv($env), $httpClient, $cache);
     }
 
     /**
@@ -121,13 +148,14 @@ class YomaMmqr implements PaymentGateway
             );
         }
 
-        $paymentStatus = trim((string) ($body['paymentStatus'] ?? ''));
+        $paymentStatus = trim(Json::scalarString($body['paymentStatus'] ?? null));
+        $refLabel = Json::scalarString($body['refLabel'] ?? null);
 
         return new PaymentStatusResult(
             orderId: null,
-            status: StatusMap::resolve(self::STATUSES, strtoupper($paymentStatus)),
+            status: PaymentStatus::resolve(self::STATUSES, strtoupper($paymentStatus)),
             gatewayStatus: $paymentStatus,
-            gatewayReference: (string) ($body['refLabel'] ?? $reference),
+            gatewayReference: $refLabel !== '' ? $refLabel : $reference,
             raw: $body,
         );
     }
@@ -145,18 +173,18 @@ class YomaMmqr implements PaymentGateway
             throw new SignatureVerificationException('Yoma MMQR callback has a missing or wrong X-Webhook-Secret header.', $payload);
         }
 
-        $orderNumber = is_scalar($payload['orderNumber'] ?? null) ? (string) $payload['orderNumber'] : '';
-        $status = is_scalar($payload['status'] ?? null) ? trim((string) $payload['status']) : '';
-        $hashValue = is_string($payload['hashValue'] ?? null) ? strtolower($payload['hashValue']) : '';
+        $orderNumber = Json::scalarString($payload['orderNumber'] ?? null);
+        $status = trim(Json::scalarString($payload['status'] ?? null));
+        $hashValue = strtolower(Json::scalarString($payload['hashValue'] ?? null));
         $expected = hash_hmac('sha256', "orderNumber={$orderNumber}&status={$status}", $orderNumber.$this->config->webhookHashKey);
 
-        if ($orderNumber === '' || ! hash_equals($expected, $hashValue)) {
+        if ($orderNumber === '' || Json::isNested($payload['status'] ?? null) || ! hash_equals($expected, $hashValue)) {
             throw new SignatureVerificationException('Yoma MMQR callback hash verification failed.', $payload);
         }
 
         return new PaymentCallback(
             orderId: $orderNumber,
-            status: StatusMap::resolve(self::STATUSES, strtoupper($status)),
+            status: PaymentStatus::resolve(self::STATUSES, strtoupper($status)),
             gatewayStatus: $status,
             raw: $payload,
         );
@@ -214,7 +242,8 @@ class YomaMmqr implements PaymentGateway
             $this->fail('token', $response, $body, isset($body['error']) ? (string) $body['error'] : null);
         }
 
-        $expiresIn = (int) ($body['expires_in'] ?? 0);
+        // The leading digits of `expires_in`, e.g. 28800 for `28800` or `"28800.0"`; anything else means one hour.
+        $expiresIn = preg_match('/^\s*([0-9]+)/', Json::scalarString($body['expires_in'] ?? null), $match) === 1 ? (int) $match[1] : 0;
         $this->cache->set($this->tokenCacheKey(), $token, max(60, ($expiresIn > 0 ? $expiresIn : 3600) - 60));
 
         return $token;
@@ -222,7 +251,7 @@ class YomaMmqr implements PaymentGateway
 
     private function tokenCacheKey(): string
     {
-        return 'php-myanmar-payments.yoma-mmqr.token.'.hash('sha256', $this->config->baseUrl.'|'.$this->config->clientId);
+        return self::TOKEN_CACHE_PREFIX.hash('sha256', $this->config->baseUrl.'|'.$this->config->clientId);
     }
 
     /**
@@ -233,7 +262,7 @@ class YomaMmqr implements PaymentGateway
         $message = isset($body['errorDescription']) ? (string) $body['errorDescription'] : (isset($body['error_description']) ? (string) $body['error_description'] : null);
 
         throw new ApiException(
-            "Yoma MMQR {$endpoint} failed".($errorCode !== null && $errorCode !== '' ? ": [{$errorCode}] {$message}" : " with HTTP {$response->status}."),
+            "Yoma MMQR {$endpoint} failed".($errorCode !== null && $errorCode !== '' ? rtrim(": [{$errorCode}] {$message}") : " with HTTP {$response->status}."),
             gatewayCode: $errorCode,
             gatewayMessage: $message,
             httpStatus: $response->status,

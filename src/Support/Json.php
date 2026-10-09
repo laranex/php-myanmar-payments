@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\Support;
 
+use stdClass;
+
 /**
  * Decodes gateway JSON without losing number precision: every number keeps its exact text as a string,
  * so `1000.50` stays `"1000.50"` and signatures are checked against what the gateway actually sent.
@@ -13,11 +15,11 @@ namespace Laranex\PhpMyanmarPayments\Support;
 final class Json
 {
     /**
-     * @return array<array-key, mixed>|null Null when the text is not a JSON object or array.
+     * @return array<array-key, mixed>|null Null when the text is not a JSON object.
      */
     public static function decode(string $json): ?array
     {
-        if (! is_array(json_decode($json, true))) {
+        if (! json_decode($json) instanceof stdClass) {
             return null;
         }
 
@@ -36,6 +38,22 @@ final class Json
         }
 
         return is_scalar($value) ? (string) $value : '';
+    }
+
+    /**
+     * Whether the value is an object or a list, which no gateway signs.
+     */
+    public static function isNested(mixed $value): bool
+    {
+        return $value !== null && ! is_scalar($value);
+    }
+
+    /**
+     * Encode text as a JSON string, e.g. for an error message: `"1,000"`.
+     */
+    public static function quote(string $value): string
+    {
+        return (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     /**

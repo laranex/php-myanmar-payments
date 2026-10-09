@@ -27,6 +27,16 @@ enum PaymentStatus: string
     /** The gateway sent a status this package does not recognize. Inspect `gatewayStatus`. */
     case Unknown = 'unknown';
 
+    /**
+     * Map a gateway status onto a package status, trimming whitespace. Statuses missing from the map are `Unknown`.
+     *
+     * @param  array<string, self>  $map  Gateway status => package status.
+     */
+    public static function resolve(array $map, ?string $gatewayStatus): self
+    {
+        return $map[trim((string) $gatewayStatus)] ?? self::Unknown;
+    }
+
     public function isFinal(): bool
     {
         return ! in_array($this, [self::Pending, self::Unknown], true);

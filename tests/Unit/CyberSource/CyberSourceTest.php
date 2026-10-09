@@ -154,9 +154,11 @@ it('falls back to req_amount when auth_amount is empty', function () {
     expect($this->gateway->handleCallback(cyberSourceCallback(['auth_amount' => '', 'decision' => 'DECLINE']))->amount)->toBe('1000.00');
 });
 
-it('requires a currency and a locale', function (string $field) {
-    new CyberSourcePaymentData(...['orderId' => 'ORDER-1', 'amount' => 1000, 'callbackUrl' => 'https://shop.test/cb', $field => '']);
-})->with(['currency', 'locale'])->throws(InvalidPaymentDataException::class);
+it('uses the default currency and locale when they are blank', function () {
+    $data = new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cb', currency: '', locale: '');
+
+    expect($data->currency)->toBe('MMK')->and($data->locale)->toBe('en-us');
+});
 
 it('rejects a re-posted checkout form with an unsigned decision added', function () {
     $payment = $this->gateway->initiate(new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cs/callback'));

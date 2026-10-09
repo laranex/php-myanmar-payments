@@ -143,8 +143,8 @@ it('verifies a callback and acknowledges it with plain success', function () {
         ->and($callback->orderId)->toBe('ORDER_1')
         ->and($callback->gatewayReference)->toBe('0112345')
         ->and($callback->amount)->toBe('1000')
-        ->and($callback->acknowledgement()->body)->toBe('success')
-        ->and($callback->acknowledgement()->status)->toBe(200);
+        ->and($callback->acknowledgement->body)->toBe('success')
+        ->and($callback->acknowledgement->status)->toBe(200);
 });
 
 it('rejects a tampered callback', function () {
@@ -198,7 +198,7 @@ it('accepts up to two decimal places, as KBZ documents', function () {
     expect((new KbzPayPaymentData('ORDER_1', Amount::parse('1000.5'), 'https://shop.test/cb'))->amount->toString())->toBe('1000.5');
 
     new KbzPayPaymentData('ORDER_1', Amount::parse('1000.505'), 'https://shop.test/cb');
-})->throws(InvalidPaymentDataException::class, 'KBZ Pay accepts at most 2 decimal places.');
+})->throws(InvalidPaymentDataException::class, 'KBZ Pay accepts at most 2 decimal places; the amount field has 3.');
 
 it('rejects a callback that carries nested values', function () {
     $request = signedCallback($this->signer, ['merch_order_id' => 'ORDER_1', 'total_amount' => '1000', 'trade_status' => 'PAY_SUCCESS']);

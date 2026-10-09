@@ -34,7 +34,14 @@ class MyanmarPayments
     private ?CyberSource $cyberSource = null;
 
     /**
-     * @param  array{kbz_pay?: array<string, mixed>, wave_money?: array<string, mixed>, aya_pay?: array<string, mixed>, yoma_mmqr?: array<string, mixed>, cyber_source?: array<string, mixed>}  $config
+     * @var array<string, callable(): object>
+     */
+    private array $envSources = [];
+
+    /**
+     * Each entry is a config object or the array its `fromArray()` takes.
+     *
+     * @param  array{kbz_pay?: KbzPayConfig|array<string, mixed>, wave_money?: WaveMoneyConfig|array<string, mixed>, aya_pay?: AyaPayConfig|array<string, mixed>, yoma_mmqr?: YomaMmqrConfig|array<string, mixed>, cyber_source?: CyberSourceConfig|array<string, mixed>}  $config
      */
     public function __construct(
         protected readonly array $config,
@@ -42,29 +49,74 @@ class MyanmarPayments
         protected readonly ?CacheInterface $cache = null,
     ) {}
 
+    /**
+     * Read every gateway's configuration from environment variables (`KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*`,
+     * `YOMA_MMQR_*`, `CYBER_SOURCE_*`) when the gateway is first used.
+     *
+     * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
+     */
+    public static function fromEnv(?array $env = null, ?ClientInterface $httpClient = null, ?CacheInterface $cache = null): self
+    {
+        $payments = new self([], $httpClient, $cache);
+        $payments->envSources = [
+            'kbz_pay' => fn (): KbzPayConfig => KbzPayConfig::fromEnv($env),
+            'wave_money' => fn (): WaveMoneyConfig => WaveMoneyConfig::fromEnv($env),
+            'aya_pay' => fn (): AyaPayConfig => AyaPayConfig::fromEnv($env),
+            'yoma_mmqr' => fn (): YomaMmqrConfig => YomaMmqrConfig::fromEnv($env),
+            'cyber_source' => fn (): CyberSourceConfig => CyberSourceConfig::fromEnv($env),
+        ];
+
+        return $payments;
+    }
+
     public function kbzPay(): KbzPay
     {
-        return $this->kbzPay ??= $this->newKbzPay(KbzPayConfig::fromArray($this->configFor('kbz_pay')));
+        if ($this->kbzPay === null) {
+            $entry = $this->entry('kbz_pay');
+            $this->kbzPay = $this->newKbzPay($entry instanceof KbzPayConfig ? $entry : KbzPayConfig::fromArray($this->configFor('kbz_pay')));
+        }
+
+        return $this->kbzPay;
     }
 
     public function waveMoney(): WaveMoney
     {
-        return $this->waveMoney ??= $this->newWaveMoney(WaveMoneyConfig::fromArray($this->configFor('wave_money')));
+        if ($this->waveMoney === null) {
+            $entry = $this->entry('wave_money');
+            $this->waveMoney = $this->newWaveMoney($entry instanceof WaveMoneyConfig ? $entry : WaveMoneyConfig::fromArray($this->configFor('wave_money')));
+        }
+
+        return $this->waveMoney;
     }
 
     public function ayaPay(): AyaPay
     {
-        return $this->ayaPay ??= $this->newAyaPay(AyaPayConfig::fromArray($this->configFor('aya_pay')));
+        if ($this->ayaPay === null) {
+            $entry = $this->entry('aya_pay');
+            $this->ayaPay = $this->newAyaPay($entry instanceof AyaPayConfig ? $entry : AyaPayConfig::fromArray($this->configFor('aya_pay')));
+        }
+
+        return $this->ayaPay;
     }
 
     public function yomaMmqr(): YomaMmqr
     {
-        return $this->yomaMmqr ??= $this->newYomaMmqr(YomaMmqrConfig::fromArray($this->configFor('yoma_mmqr')));
+        if ($this->yomaMmqr === null) {
+            $entry = $this->entry('yoma_mmqr');
+            $this->yomaMmqr = $this->newYomaMmqr($entry instanceof YomaMmqrConfig ? $entry : YomaMmqrConfig::fromArray($this->configFor('yoma_mmqr')));
+        }
+
+        return $this->yomaMmqr;
     }
 
     public function cyberSource(): CyberSource
     {
-        return $this->cyberSource ??= $this->newCyberSource(CyberSourceConfig::fromArray($this->configFor('cyber_source')));
+        if ($this->cyberSource === null) {
+            $entry = $this->entry('cyber_source');
+            $this->cyberSource = $this->newCyberSource($entry instanceof CyberSourceConfig ? $entry : CyberSourceConfig::fromArray($this->configFor('cyber_source')));
+        }
+
+        return $this->cyberSource;
     }
 
     protected function newKbzPay(KbzPayConfig $config): KbzPay
@@ -93,10 +145,24 @@ class MyanmarPayments
     }
 
     /**
+     * The gateway's entry as an array, or `[]` when it is a config object or missing.
+     *
      * @return array<string, mixed>
      */
     protected function configFor(string $gateway): array
     {
-        return (array) ($this->config[$gateway] ?? []);
+        $entry = $this->config[$gateway] ?? [];
+
+        return is_array($entry) ? $entry : [];
+    }
+
+    /**
+     * The gateway's configured entry: a config object, an array, or null.
+     */
+    private function entry(string $gateway): mixed
+    {
+        $source = $this->envSources[$gateway] ?? null;
+
+        return $source !== null ? $source() : ($this->config[$gateway] ?? null);
     }
 }

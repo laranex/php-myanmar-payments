@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Laranex\PhpMyanmarPayments\KbzPay;
 
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Support\Config;
+use Laranex\PhpMyanmarPayments\Support\Env;
 
 /**
  * Credentials and endpoints for KBZ Pay. UAT and production issue separate credentials.
@@ -30,6 +32,8 @@ final class KbzPayConfig
      * @param  bool  $sandbox  Use the UAT endpoints instead of production.
      * @param  string|null  $apiUrl  Override the API base URL.
      * @param  string|null  $pwaUrl  Override the PWA checkout URL, e.g. `https://static.kbzpay.com/pgw/uat/pwa/#/`.
+     *
+     * @throws ConfigurationException When a credential is blank.
      */
     public function __construct(
         public readonly string $appId,
@@ -39,12 +43,18 @@ final class KbzPayConfig
         ?string $apiUrl = null,
         ?string $pwaUrl = null,
     ) {
-        $this->apiUrl = rtrim($apiUrl ?? ($sandbox ? self::SANDBOX_API_URL : self::PRODUCTION_API_URL), '/');
-        $this->pwaUrl = rtrim($pwaUrl ?? ($sandbox ? self::SANDBOX_PWA_URL : self::PRODUCTION_PWA_URL), '/').'/';
+        Config::requireValue('kbz_pay', 'app_id', $appId);
+        Config::requireValue('kbz_pay', 'app_key', $appKey);
+        Config::requireValue('kbz_pay', 'merchant_code', $merchantCode);
+
+        $this->apiUrl = rtrim(Config::optionalValue($apiUrl) ?? ($sandbox ? self::SANDBOX_API_URL : self::PRODUCTION_API_URL), '/');
+        $this->pwaUrl = rtrim(Config::optionalValue($pwaUrl) ?? ($sandbox ? self::SANDBOX_PWA_URL : self::PRODUCTION_PWA_URL), '/').'/';
     }
 
     /**
-     * @param  array{app_id?: string, app_key?: string, merchant_code?: string, sandbox?: bool|string, api_url?: string, pwa_url?: string}  $config
+     * @param  array{app_id?: string|null, app_key?: string|null, merchant_code?: string|null, sandbox?: bool|string|null, api_url?: string|null, pwa_url?: string|null}  $config
+     *
+     * @throws ConfigurationException When a credential is missing.
      */
     public static function fromArray(array $config): self
     {
@@ -58,5 +68,27 @@ final class KbzPayConfig
             apiUrl: $config->string('api_url'),
             pwaUrl: $config->string('pwa_url'),
         );
+    }
+
+    /**
+     * Read `KBZ_PAY_APP_ID`, `KBZ_PAY_APP_KEY`, `KBZ_PAY_MERCHANT_CODE`, `KBZ_PAY_SANDBOX`, `KBZ_PAY_BASE_URL`
+     * and `KBZ_PAY_PWA_BASE_REDIRECT_URL`.
+     *
+     * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
+    public static function fromEnv(?array $env = null): self
+    {
+        $env = new Env($env);
+
+        return self::fromArray([
+            'app_id' => $env->first('KBZ_PAY_APP_ID'),
+            'app_key' => $env->first('KBZ_PAY_APP_KEY'),
+            'merchant_code' => $env->first('KBZ_PAY_MERCHANT_CODE'),
+            'sandbox' => $env->first('KBZ_PAY_SANDBOX'),
+            'api_url' => $env->first('KBZ_PAY_BASE_URL'),
+            'pwa_url' => $env->first('KBZ_PAY_PWA_BASE_REDIRECT_URL'),
+        ]);
     }
 }

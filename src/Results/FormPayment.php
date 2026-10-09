@@ -31,17 +31,36 @@ final class FormPayment implements PaymentResult
         return PaymentFlow::Form;
     }
 
+    /**
+     * The value of the named field, or null.
+     */
+    public function field(string $name): ?string
+    {
+        return $this->fields[$name] ?? null;
+    }
+
+    /**
+     * The fields as an array, e.g. to render the form with your own template.
+     *
+     * @return array<string, string>
+     */
+    public function values(): array
+    {
+        return $this->fields;
+    }
+
     public function withAutoSubmitUrl(string $url): self
     {
         return new self($this->orderId, $this->action, $this->fields, $this->enctype, $url);
     }
 
     /**
-     * A complete HTML page that posts the form as soon as it loads.
+     * A complete HTML page that posts the form as soon as it loads. `&`, `<`, `>`, `"` and `'` are escaped
+     * (`&amp;`, `&lt;`, `&gt;`, `&#34;`, `&#39;`), byte for byte like the Go, Node and Python SDKs.
      */
     public function toHtml(): string
     {
-        $escape = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $escape = fn (string $value): string => strtr($value, ['&' => '&amp;', '<' => '&lt;', '>' => '&gt;', '"' => '&#34;', "'" => '&#39;']);
 
         $inputs = '';
 

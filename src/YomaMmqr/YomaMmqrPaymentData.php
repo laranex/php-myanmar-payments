@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\YomaMmqr;
 
 use Laranex\PhpMyanmarPayments\Amount;
+use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Support\Validator;
 
 /**
@@ -29,12 +30,22 @@ final class YomaMmqrPaymentData
     ) {
         $this->amount = Amount::from($amount);
 
+        $this->validate();
+    }
+
+    /**
+     * Check the data against the gateway's documented rules again. The constructor already does.
+     *
+     * @throws InvalidPaymentDataException
+     */
+    public function validate(): void
+    {
         (new Validator)
-            ->required('orderId', $orderId)
-            ->max('orderId', $orderId, 20)
+            ->required('orderId', $this->orderId)
+            ->max('orderId', $this->orderId, 20)
             ->amount('Yoma MMQR', $this->amount, maxDecimals: 0)
-            ->required('description', $description)
-            ->max('description', $description, 50)
+            ->required('description', $this->description)
+            ->max('description', $this->description, 50)
             ->validate();
     }
 }

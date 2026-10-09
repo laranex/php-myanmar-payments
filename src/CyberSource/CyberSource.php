@@ -6,11 +6,12 @@ namespace Laranex\PhpMyanmarPayments\CyberSource;
 
 use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 use Laranex\PhpMyanmarPayments\Results\FormPayment;
 use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
-use Laranex\PhpMyanmarPayments\Support\StatusMap;
+use Laranex\PhpMyanmarPayments\Support\Json;
 
 /**
  * CyberSource Secure Acceptance hosted checkout for card payments.
@@ -31,7 +32,29 @@ class CyberSource implements PaymentGateway
         'CANCEL' => PaymentStatus::Canceled,
     ];
 
-    public function __construct(public readonly CyberSourceConfig $config) {}
+    public readonly CyberSourceConfig $config;
+
+    /**
+     * @param  CyberSourceConfig|array<string, mixed>  $config  A config object or a `CyberSourceConfig::fromArray()` array.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
+    public function __construct(CyberSourceConfig|array $config)
+    {
+        $this->config = $config instanceof CyberSourceConfig ? $config : CyberSourceConfig::fromArray($config);
+    }
+
+    /**
+     * A gateway configured from the `CYBER_SOURCE_*` environment variables.
+     *
+     * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
+    public static function fromEnv(?array $env = null): self
+    {
+        return new self(CyberSourceConfig::fromEnv($env));
+    }
 
     /**
      * Sign the payment fields. The customer's browser must POST the returned form to CyberSource.
@@ -89,7 +112,7 @@ class CyberSource implements PaymentGateway
 
         return new PaymentCallback(
             orderId: (string) ($signed['req_reference_number'] ?? ''),
-            status: StatusMap::resolve(self::STATUSES, $decision),
+            status: PaymentStatus::resolve(self::STATUSES, $decision),
             gatewayStatus: $decision,
             gatewayReference: isset($signed['transaction_id']) ? (string) $signed['transaction_id'] : null,
             amount: $this->amount($signed),
@@ -117,7 +140,7 @@ class CyberSource implements PaymentGateway
                 return null;
             }
 
-            $pairs[] = $name.'='.$fields[$name];
+            $pairs[] = $name.'='.Json::scalarString($fields[$name]);
         }
 
         return base64_encode(hash_hmac('sha256', implode(',', $pairs), $this->config->secretKey, true));

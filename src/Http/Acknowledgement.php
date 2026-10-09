@@ -19,6 +19,14 @@ final class Acknowledgement
     ) {}
 
     /**
+     * An empty `200 text/plain` response, which most gateways expect.
+     */
+    public static function default(): self
+    {
+        return new self;
+    }
+
+    /**
      * Send the acknowledgement with PHP's native output functions.
      */
     public function send(): void

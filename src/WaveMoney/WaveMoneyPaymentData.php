@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\WaveMoney;
 
 use Laranex\PhpMyanmarPayments\Amount;
+use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Support\Validator;
 
 /**
@@ -44,15 +45,35 @@ final class WaveMoneyPaymentData
         $this->amount = $amount === null ? self::sumOf($items) : Amount::from($amount);
         $this->merchantReferenceId = $merchantReferenceId === null || $merchantReferenceId === '' ? bin2hex(random_bytes(16)) : $merchantReferenceId;
 
-        (new Validator)
-            ->required('orderId', $orderId)
-            ->required('callbackUrl', $callbackUrl)
-            ->url('callbackUrl', $callbackUrl)
-            ->required('returnUrl', $returnUrl)
-            ->url('returnUrl', $returnUrl)
-            ->required('description', $description)
-            ->when($items === [], 'items', 'The items field must have at least one item.')
-            ->when(! array_is_list($items) || array_filter($items, fn (mixed $item): bool => ! $item instanceof WaveMoneyItem) !== [], 'items', 'The items field must be a list of '.WaveMoneyItem::class.'.')
+        $this->validate();
+    }
+
+    /**
+     * Check the data against the gateway's documented rules again. The constructor already does.
+     *
+     * @throws InvalidPaymentDataException
+     */
+    public function validate(): void
+    {
+        $validator = (new Validator)
+            ->required('orderId', $this->orderId)
+            ->required('callbackUrl', $this->callbackUrl)
+            ->url('callbackUrl', $this->callbackUrl)
+            ->required('returnUrl', $this->returnUrl)
+            ->url('returnUrl', $this->returnUrl)
+            ->required('description', $this->description)
+            ->when($this->items === [], 'items', 'The items field must have at least one item.')
+            ->when(! array_is_list($this->items) || array_filter($this->items, fn (mixed $item): bool => ! $item instanceof WaveMoneyItem) !== [], 'items', 'The items field must be a list of '.WaveMoneyItem::class.'.');
+
+        foreach (array_values($this->items) as $index => $item) {
+            if ($item instanceof WaveMoneyItem) {
+                $validator
+                    ->required("items.{$index}.name", $item->name)
+                    ->amount('Wave Money', $item->amount, maxDecimals: 0, field: "items.{$index}.amount");
+            }
+        }
+
+        $validator
             ->amount('Wave Money', $this->amount, maxDecimals: 0)
             ->required('merchantReferenceId', $this->merchantReferenceId)
             ->validate();

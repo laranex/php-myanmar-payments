@@ -7,6 +7,7 @@ namespace Laranex\PhpMyanmarPayments\AyaPay;
 use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 use Laranex\PhpMyanmarPayments\Http\HttpResponse;
@@ -14,7 +15,7 @@ use Laranex\PhpMyanmarPayments\Http\Transport;
 use Laranex\PhpMyanmarPayments\Results\FormPayment;
 use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
 use Laranex\PhpMyanmarPayments\Results\PaymentStatusResult;
-use Laranex\PhpMyanmarPayments\Support\StatusMap;
+use Laranex\PhpMyanmarPayments\Support\Json;
 use Psr\Http\Client\ClientInterface;
 
 /**
@@ -32,16 +33,36 @@ class AyaPay implements PaymentGateway
         '04' => PaymentStatus::Expired,
     ];
 
+    public readonly AyaPayConfig $config;
+
     private readonly Transport $transport;
 
     private readonly AyaPaySigner $signer;
 
+    /**
+     * @param  AyaPayConfig|array<string, mixed>  $config  A config object or an `AyaPayConfig::fromArray()` array.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
     public function __construct(
-        public readonly AyaPayConfig $config,
+        AyaPayConfig|array $config,
         ?ClientInterface $httpClient = null,
     ) {
+        $this->config = $config instanceof AyaPayConfig ? $config : AyaPayConfig::fromArray($config);
         $this->transport = new Transport($httpClient);
-        $this->signer = new AyaPaySigner($config->appSecret);
+        $this->signer = new AyaPaySigner($this->config->appSecret);
+    }
+
+    /**
+     * A gateway configured from the `AYA_PAY_*` (or `AYA_PGW_*`) environment variables.
+     *
+     * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
+     *
+     * @throws ConfigurationException When a credential is missing.
+     */
+    public static function fromEnv(?array $env = null, ?ClientInterface $httpClient = null): self
+    {
+        return new self(AyaPayConfig::fromEnv($env), $httpClient);
     }
 
     /**
@@ -67,10 +88,12 @@ class AyaPay implements PaymentGateway
                 continue;
             }
 
-            $methods = array_map('strval', (array) ($service['methods'] ?? []));
+            $methods = array_map(Json::scalarString(...), array_values(array_filter((array) ($service['methods'] ?? []), is_scalar(...))));
+
+            $name = Json::scalarString($service['name'] ?? null);
 
             $services[] = new AyaPayService(
-                name: (string) ($service['name'] ?? $service['key']),
+                name: $name !== '' ? $name : (string) $service['key'],
                 key: (string) $service['key'],
                 imageUrl: isset($service['image_url']) ? (string) $service['image_url'] : null,
                 methods: array_values(array_filter(array_map(fn (string $method): ?AyaPayMethod => AyaPayMethod::tryFrom($method), $methods))),
@@ -134,9 +157,11 @@ class AyaPay implements PaymentGateway
         $payload = $this->verifiedPayload(is_array($body['data'] ?? null) ? $body['data'] : [], 'enquiry response');
         $statusCode = trim((string) ($payload['statusCode'] ?? ''));
 
+        $reportedOrderId = Json::scalarString($payload['merchOrderId'] ?? null);
+
         return new PaymentStatusResult(
-            orderId: (string) ($payload['merchOrderId'] ?? $orderId),
-            status: StatusMap::resolve(self::STATUSES, $statusCode),
+            orderId: $reportedOrderId !== '' ? $reportedOrderId : $orderId,
+            status: PaymentStatus::resolve(self::STATUSES, $statusCode),
             gatewayStatus: $statusCode,
             gatewayReference: isset($payload['tranId']) ? (string) $payload['tranId'] : null,
             amount: isset($payload['amount']) ? (string) $payload['amount'] : null,
@@ -162,7 +187,7 @@ class AyaPay implements PaymentGateway
      */
     public function verifyRedirect(CallbackRequest $request): PaymentCallback
     {
-        return $this->toCallback($this->verifiedPayload($request->query + $request->parsedBody(), 'redirect'));
+        return $this->toCallback($this->verifiedPayload($request->queryInput(), 'redirect'));
     }
 
     /**
@@ -174,7 +199,7 @@ class AyaPay implements PaymentGateway
 
         return new PaymentCallback(
             orderId: (string) ($payload['merchOrderId'] ?? ''),
-            status: StatusMap::resolve(self::STATUSES, $statusCode),
+            status: PaymentStatus::resolve(self::STATUSES, $statusCode),
             gatewayStatus: $statusCode,
             gatewayReference: isset($payload['tranId']) ? (string) $payload['tranId'] : null,
             amount: isset($payload['amount']) ? (string) $payload['amount'] : null,
@@ -214,7 +239,7 @@ class AyaPay implements PaymentGateway
             $message = isset($body['message']) ? (string) $body['message'] : null;
 
             throw new ApiException(
-                "AYA Pay {$endpoint} failed".($status !== null && $status !== '' ? ": [{$status}] {$message}" : " with HTTP {$response->status}."),
+                "AYA Pay {$endpoint} failed".($status !== null && $status !== '' ? rtrim(": [{$status}] {$message}") : " with HTTP {$response->status}."),
                 gatewayCode: $status,
                 gatewayMessage: $message,
                 httpStatus: $response->status,
