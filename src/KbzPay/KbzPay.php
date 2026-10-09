@@ -30,7 +30,7 @@ class KbzPay implements PaymentGateway
         'WAIT_PAY' => PaymentStatus::Pending,
         'PAYING' => PaymentStatus::Pending,
         'PAY_FAILED' => PaymentStatus::Failed,
-        'ORDER_CLOSED' => PaymentStatus::Cancelled,
+        'ORDER_CLOSED' => PaymentStatus::Canceled,
         'ORDER_EXPIRED' => PaymentStatus::Expired,
     ];
 

@@ -120,7 +120,7 @@ it('maps every queryorder trade status', function (string $tradeStatus, PaymentS
     ['WAIT_PAY', PaymentStatus::Pending],
     ['PAYING', PaymentStatus::Pending],
     ['PAY_FAILED', PaymentStatus::Failed],
-    ['ORDER_CLOSED', PaymentStatus::Cancelled],
+    ['ORDER_CLOSED', PaymentStatus::Canceled],
     ['ORDER_EXPIRED', PaymentStatus::Expired],
     ['SOMETHING_NEW', PaymentStatus::Unknown],
 ]);

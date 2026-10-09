@@ -28,7 +28,7 @@ class CyberSource implements PaymentGateway
         'REVIEW' => PaymentStatus::Pending,
         'DECLINE' => PaymentStatus::Failed,
         'ERROR' => PaymentStatus::Failed,
-        'CANCEL' => PaymentStatus::Cancelled,
+        'CANCEL' => PaymentStatus::Canceled,
     ];
 
     public function __construct(public readonly CyberSourceConfig $config) {}
