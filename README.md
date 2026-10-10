@@ -5,7 +5,7 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/laranex/php-myanmar-payments.svg?style=flat-square)](https://packagist.org/packages/laranex/php-myanmar-payments)
 [![License](https://img.shields.io/packagist/l/laranex/php-myanmar-payments.svg?style=flat-square)](LICENSE.md)
 
-PHP SDK for Myanmar payment gateways: KBZ Pay, Wave Money, AYA Pay, Yoma MMQR and CyberSource. Framework-agnostic, typed requests and results, works with any PSR-18 HTTP client. Built for humans and AI agents.
+PHP SDK for Myanmar payment gateways: KBZ Pay, Wave Money, AYA Pay, Yoma MMQR and CyberSource. Typed requests and results, exact amounts, works with any PSR-18 HTTP client. Built for humans and AI agents.
 
 ## Documentation
 
