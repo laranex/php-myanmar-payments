@@ -15,7 +15,7 @@ use Laranex\PhpMyanmarPayments\KbzPay\KbzPayPaymentData;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPaySigner;
 
 beforeEach(function () {
-    $this->config = new KbzPayConfig(appId: 'kp123', appKey: 'secret-key', merchantCode: '100001');
+    $this->config = new KbzPayConfig(appId: 'kp123', appKey: 'secret-key', merchantCode: '100001', timeoutSeconds: 30);
     $this->signer = new KbzPaySigner('secret-key');
     $this->data = new KbzPayPaymentData(orderId: 'ORDER_1', amount: 1000, callbackUrl: 'https://shop.test/kbz/callback');
 });
@@ -50,14 +50,14 @@ it('sends a signed precreate request and returns the PWA redirect url', function
     $payment = (new KbzPay($this->config, $http))->pwa($this->data);
 
     $request = requestJson($http->getLastRequest())['Request'];
-    expect((string) $http->getLastRequest()->getUri())->toBe(KbzPayConfig::SANDBOX_API_URL.'/precreate')
+    expect((string) $http->getLastRequest()->getUri())->toBe(KbzPayConfig::PRODUCTION_API_URL.'/precreate')
         ->and($request['method'])->toBe('kbz.payment.precreate')
         ->and($request['notify_url'])->toBe('https://shop.test/kbz/callback')
         ->and($request['biz_content'])->toMatchArray(['merch_order_id' => 'ORDER_1', 'total_amount' => '1000', 'trade_type' => 'PWAAPP', 'trans_currency' => 'MMK'])
         ->and($request['sign'])->toBe($this->signer->sign(array_diff_key($request, ['biz_content' => true]) + $request['biz_content']));
 
     parse_str(substr($payment->url, strpos($payment->url, '?') + 1), $query);
-    expect($payment->url)->toStartWith(KbzPayConfig::SANDBOX_PWA_URL.'?')
+    expect($payment->url)->toStartWith(KbzPayConfig::PRODUCTION_PWA_URL.'?')
         ->and($payment->orderId)->toBe('ORDER_1')
         ->and($payment->gatewayReference)->toBe('PREPAY123')
         ->and($query['prepay_id'])->toBe('PREPAY123')
@@ -176,14 +176,14 @@ it('validates the order against KBZ limits', function (array $overrides, string 
 ]);
 
 it('builds config from an array and names a missing key', function () {
-    expect(KbzPayConfig::fromArray(['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c', 'sandbox' => 'false'])->apiUrl)
+    expect(KbzPayConfig::fromArray(['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c', 'timeout_in_seconds' => '30'])->apiUrl)
         ->toBe(KbzPayConfig::PRODUCTION_API_URL);
 
-    KbzPayConfig::fromArray(['app_id' => 'a', 'merchant_code' => 'c']);
+    KbzPayConfig::fromArray(['app_id' => 'a', 'merchant_code' => 'c', 'timeout_in_seconds' => 30]);
 })->throws(ConfigurationException::class, '[app_key]');
 
 it('normalizes the PWA url so the query always follows "#/"', function (string $pwaUrl) {
-    expect((new KbzPayConfig('a', 'b', 'c', pwaUrl: $pwaUrl))->pwaUrl)->toBe('https://static.kbzpay.com/pgw/uat/pwa/#/');
+    expect((new KbzPayConfig('a', 'b', 'c', 30, pwaUrl: $pwaUrl))->pwaUrl)->toBe('https://static.kbzpay.com/pgw/uat/pwa/#/');
 })->with(['https://static.kbzpay.com/pgw/uat/pwa/#', 'https://static.kbzpay.com/pgw/uat/pwa/#/']);
 
 it('sends decimal amounts as KBZ allows up to two decimal places', function () {

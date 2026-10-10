@@ -5,6 +5,7 @@ declare(strict_types=1);
 use GuzzleHttp\Psr7\Response;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
@@ -15,7 +16,7 @@ use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrPaymentData;
 use Psr\SimpleCache\CacheInterface;
 
 beforeEach(function () {
-    $this->config = new YomaMmqrConfig(merchantId: 'M001', clientId: 'client', clientSecret: 'secret', webhookHashKey: 'hash-key');
+    $this->config = new YomaMmqrConfig(merchantId: 'M001', clientId: 'client', clientSecret: 'secret', webhookHashKey: 'hash-key', apiVersion: 'v1rc', timeoutSeconds: 30);
 });
 
 function tokenResponse(string $token = 'token-1'): Response
@@ -33,10 +34,10 @@ it('checks out the order, generates the QR and returns the image with its expiry
     $qr = (new YomaMmqr($this->config, $http))->initiate(new YomaMmqrPaymentData('ORD-2026-001', 1000, 'Order 1'));
 
     [$token, $checkout, $generate] = $http->getRequests();
-    expect((string) $token->getUri())->toBe('https://devapi.yomabank.net/token')
+    expect((string) $token->getUri())->toBe('https://paymenthubapi.yomabank.com/token')
         ->and($token->getHeaderLine('Authorization'))->toBe('Basic '.base64_encode('client:secret'))
         ->and(requestForm($token))->toBe(['grant_type' => 'client_credentials'])
-        ->and((string) $checkout->getUri())->toBe('https://devapi.yomabank.net/payment-gateway/v1rc/api/payment/checkout')
+        ->and((string) $checkout->getUri())->toBe('https://paymenthubapi.yomabank.com/payment-gateway/v1rc/api/payment/checkout')
         ->and($checkout->getHeaderLine('Authorization'))->toBe('Bearer token-1')
         ->and(requestJson($checkout))->toBe(['merchantId' => 'M001', 'orderNumber' => 'ORD-2026-001', 'amount' => '1000', 'description' => 'Order 1'])
         ->and(requestJson($generate))->toBe(['merchantId' => 'M001', 'orderNumber' => 'ORD-2026-001'])
@@ -112,7 +113,7 @@ it('rejects a callback with a wrong hash', function () {
 })->throws(SignatureVerificationException::class);
 
 it('checks the webhook secret header when one is configured', function () {
-    $config = new YomaMmqrConfig(merchantId: 'M001', clientId: 'c', clientSecret: 's', webhookHashKey: 'hash-key', webhookSecret: 'shared');
+    $config = new YomaMmqrConfig(merchantId: 'M001', clientId: 'c', clientSecret: 's', webhookHashKey: 'hash-key', apiVersion: 'v1rc', timeoutSeconds: 30, webhookSecret: 'shared');
     $payload = ['orderNumber' => 'ORD-1', 'status' => 'success', 'hashValue' => hash_hmac('sha256', 'orderNumber=ORD-1&status=success', 'ORD-1hash-key')];
 
     expect((new YomaMmqr($config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload, ['X-Webhook-Secret' => 'shared']))->isSuccessful())->toBeTrue();
@@ -124,10 +125,14 @@ it('enforces the order number and description limits', function () {
     new YomaMmqrPaymentData(str_repeat('A', 21), 1000, str_repeat('d', 51));
 })->throws(InvalidPaymentDataException::class);
 
-it('defaults to the production payment hub when not in sandbox', function () {
-    expect((new YomaMmqrConfig(merchantId: 'M', clientId: 'c', clientSecret: 's', webhookHashKey: 'h', sandbox: false))->baseUrl)
+it('defaults to the production payment hub', function () {
+    expect((new YomaMmqrConfig(merchantId: 'M', clientId: 'c', clientSecret: 's', webhookHashKey: 'h', apiVersion: 'v1rc', timeoutSeconds: 30))->baseUrl)
         ->toBe('https://paymenthubapi.yomabank.com');
 });
+
+it('requires the API version', function () {
+    new YomaMmqrConfig(merchantId: 'M', clientId: 'c', clientSecret: 's', webhookHashKey: 'h', apiVersion: ' ', timeoutSeconds: 30);
+})->throws(ConfigurationException::class, 'The yoma_mmqr configuration is missing [api_version].');
 
 it('forgets the cached token so the next call authenticates again', function () {
     $cache = new ArrayCache;
@@ -145,7 +150,7 @@ it('forgets the cached token so the next call authenticates again', function () 
 
     $requests = $http->getRequests();
     expect($requests)->toHaveCount(4)
-        ->and((string) $requests[2]->getUri())->toBe('https://devapi.yomabank.net/token')
+        ->and((string) $requests[2]->getUri())->toBe('https://paymenthubapi.yomabank.com/token')
         ->and($requests[3]->getHeaderLine('Authorization'))->toBe('Bearer token-2');
 });
 

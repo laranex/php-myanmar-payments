@@ -13,8 +13,8 @@ use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqr;
 
 it('builds each configured gateway once', function () {
     $payments = new MyanmarPayments([
-        'kbz_pay' => ['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c'],
-        'yoma_mmqr' => ['merchant_id' => 'm', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h'],
+        'kbz_pay' => ['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c', 'timeout_in_seconds' => 30],
+        'yoma_mmqr' => ['merchant_id' => 'm', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h', 'api_version' => 'v1rc', 'timeout_in_seconds' => 30],
     ], mockHttp());
 
     expect($payments->kbzPay())->toBeInstanceOf(KbzPay::class)->toBe($payments->kbzPay())
@@ -23,10 +23,10 @@ it('builds each configured gateway once', function () {
 
 it('builds every gateway from one configuration array', function () {
     $payments = new MyanmarPayments([
-        'kbz_pay' => ['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c'],
-        'wave_money' => ['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop'],
-        'aya_pay' => ['app_key' => 'k', 'app_secret' => 's'],
-        'yoma_mmqr' => ['merchant_id' => 'm', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h'],
+        'kbz_pay' => ['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c', 'timeout_in_seconds' => 30],
+        'wave_money' => ['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => 300, 'timeout_in_seconds' => 30],
+        'aya_pay' => ['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => 30],
+        'yoma_mmqr' => ['merchant_id' => 'm', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h', 'api_version' => 'v1rc', 'timeout_in_seconds' => 30],
         'cyber_source' => ['profile_id' => 'p', 'access_key' => 'a', 'secret_key' => 's'],
     ], mockHttp());
 
@@ -52,10 +52,20 @@ it('only complains about a gateway when it is used without configuration', funct
     (new MyanmarPayments([], mockHttp()))->waveMoney();
 })->throws(ConfigurationException::class, 'wave_money configuration is missing [merchant_id]');
 
-it('reads the sandbox flag from common boolean strings', function (mixed $value, bool $sandbox) {
-    expect(AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's', 'sandbox' => $value])->sandbox)->toBe($sandbox);
+it('requires every setting except the URL overrides', function (array $config, string $key) {
+    expect(fn () => AyaPayConfig::fromArray($config))->toThrow(ConfigurationException::class, "[{$key}]");
 })->with([
-    ['false', false], ['FALSE', false], ['0', false], ['f', false], ['no', false], [' off ', false], [false, false], [0, false],
-    ['true', true], ['1', true], ['t', true], ['yes', true], ['on', true], [true, true],
-    ['', true], [null, true], ['maybe', true],
+    [['app_secret' => 's', 'timeout_in_seconds' => 30], 'app_key'],
+    [['app_key' => 'k', 'timeout_in_seconds' => 30], 'app_secret'],
+    [['app_key' => 'k', 'app_secret' => 's'], 'timeout_in_seconds'],
+    [['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => ' '], 'timeout_in_seconds'],
 ]);
+
+it('reads whole numbers of seconds from integers and integer text', function (mixed $value, int $seconds) {
+    expect(AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => $value])->timeoutSeconds)->toBe($seconds);
+})->with([[30, 30], ['30', 30], [' 45 ', 45], ['+10', 10]]);
+
+it('rejects seconds that are not a whole number greater than 0', function (mixed $value) {
+    expect(fn () => AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => $value]))
+        ->toThrow(ConfigurationException::class, 'The aya_pay configuration [timeout_in_seconds] must be a whole number greater than 0.');
+})->with([0, -5, '0', '-5', 'five', '1.5', 1.5, true]);

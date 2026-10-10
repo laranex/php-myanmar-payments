@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
+use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
@@ -13,7 +14,7 @@ use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyItem;
 use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyPaymentData;
 
 beforeEach(function () {
-    $this->config = new WaveMoneyConfig(merchantId: 'testmerchantID', secretKey: 'test-secret', merchantName: 'Shop');
+    $this->config = new WaveMoneyConfig(merchantId: 'testmerchantID', secretKey: 'test-secret', merchantName: 'Shop', timeToLiveSeconds: 300, timeoutSeconds: 30);
     $this->data = new WaveMoneyPaymentData(
         orderId: '100',
         callbackUrl: 'https://shop.test/wave/callback',
@@ -42,12 +43,12 @@ it('posts a form encoded, hashed payment request and redirects to authenticate',
 
     $request = $http->getLastRequest();
     $form = requestForm($request);
-    expect((string) $request->getUri())->toBe('https://preprodpayments.wavemoney.io:8107/payment')
+    expect((string) $request->getUri())->toBe('https://payments.wavemoney.io/payment')
         ->and($request->getHeaderLine('Content-Type'))->toBe('application/x-www-form-urlencoded')
         ->and($form)->toMatchArray(['order_id' => '100', 'merchant_reference_id' => 'ref-001', 'amount' => '1000', 'merchant_name' => 'Shop'])
         ->and(json_decode($form['items'], true))->toBe([['name' => 'Shoes', 'amount' => 600], ['name' => 'Socks', 'amount' => 400]])
         ->and($form['hash'])->toBe(hash_hmac('sha256', '300testmerchantID1001000https://shop.test/wave/callbackref-001', 'test-secret'))
-        ->and($payment->url)->toBe('https://preprodpayments.wavemoney.io/authenticate?transaction_id=enc%2F123%2Babc')
+        ->and($payment->url)->toBe('https://payments.wavemoney.io/authenticate?transaction_id=enc%2F123%2Babc')
         ->and($payment->gatewayReference)->toBe('enc/123+abc');
 });
 
@@ -139,11 +140,18 @@ it('rejects a callback whose signed fields are not scalar', function () {
     (new WaveMoney($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
 })->throws(SignatureVerificationException::class);
 
-it('falls back to a 300 second time to live when the configured one is not positive', function () {
-    expect((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 0))->timeToLiveSeconds)->toBe(300)
-        ->and(WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => '-5'])->timeToLiveSeconds)->toBe(300)
-        ->and((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 600))->timeToLiveSeconds)->toBe(600);
+it('rejects a time to live that is not greater than 0', function () {
+    $message = 'The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0.';
+
+    expect(fn () => new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 0, timeoutSeconds: 30))->toThrow(ConfigurationException::class, $message)
+        ->and(fn () => WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => '-5', 'timeout_in_seconds' => 30]))->toThrow(ConfigurationException::class, $message);
 });
+
+it('requires the time to live and keeps the configured one', function () {
+    expect((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 600, timeoutSeconds: 30))->timeToLiveSeconds)->toBe(600);
+
+    WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'timeout_in_seconds' => 30]);
+})->throws(ConfigurationException::class, 'The wave_money configuration is missing [time_to_live_in_seconds].');
 
 it('generates a merchant reference id when an empty one is given', function () {
     $data = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WaveMoneyItem('A', 1000)], merchantReferenceId: '');

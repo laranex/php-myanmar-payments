@@ -47,10 +47,10 @@ function cyberSourceCallback(array $overrides = []): CallbackRequest
 it('signs the hosted checkout fields', function () {
     $payment = $this->gateway->initiate(new CyberSourcePaymentData(
         orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cs/callback', returnUrl: 'https://shop.test/done',
-        transactionType: CyberSourceTransactionType::Authorization,
+        currency: 'MMK', transactionType: CyberSourceTransactionType::Authorization, locale: 'en-us',
     ));
 
-    expect($payment->action)->toBe('https://testsecureacceptance.cybersource.com/pay')
+    expect($payment->action)->toBe('https://secureacceptance.cybersource.com/pay')
         ->and($payment->fields)->toMatchArray(['reference_number' => 'ORDER-1', 'amount' => '1000', 'transaction_type' => 'authorization', 'locale' => 'en-us', 'currency' => 'MMK'])
         ->and($payment->fields['signature'])->toBe(cyberSourceSignature($payment->fields));
 });
@@ -84,14 +84,14 @@ it('rejects a tampered callback', function () {
 })->throws(SignatureVerificationException::class);
 
 it('accepts decimal amounts and other currencies, as the Secure Acceptance spec allows', function () {
-    $payment = $this->gateway->initiate(new CyberSourcePaymentData(orderId: 'ORDER-2', amount: Amount::parse('10.50'), callbackUrl: 'https://shop.test/cb', currency: 'USD'));
+    $payment = $this->gateway->initiate(new CyberSourcePaymentData(orderId: 'ORDER-2', amount: Amount::parse('10.50'), callbackUrl: 'https://shop.test/cb', currency: 'USD', transactionType: CyberSourceTransactionType::Sale, locale: 'en-us'));
 
     expect($payment->fields)->toMatchArray(['amount' => '10.50', 'currency' => 'USD']);
 });
 
 it('enforces the Secure Acceptance field rules', function (array $overrides, string $field) {
     try {
-        new CyberSourcePaymentData(...$overrides + ['orderId' => 'ORDER-1', 'amount' => 1000, 'callbackUrl' => 'https://shop.test/cb']);
+        new CyberSourcePaymentData(...$overrides + ['orderId' => 'ORDER-1', 'amount' => 1000, 'callbackUrl' => 'https://shop.test/cb', 'currency' => 'MMK', 'transactionType' => CyberSourceTransactionType::Sale, 'locale' => 'en-us']);
     } catch (InvalidPaymentDataException $e) {
         expect($e->errors())->toHaveKey($field);
 
@@ -104,17 +104,19 @@ it('enforces the Secure Acceptance field rules', function (array $overrides, str
     'url over 255' => [['returnUrl' => 'https://shop.test/'.str_repeat('a', 250)], 'returnUrl'],
     'amount over 15 chars' => [['amount' => Amount::parse('1234567890123.45')], 'amount'],
     'plain en locale' => [['locale' => 'en'], 'locale'],
+    'blank currency' => [['currency' => ''], 'currency'],
+    'blank locale' => [['locale' => ' '], 'locale'],
     'order id over 50' => [['orderId' => str_repeat('A', 51)], 'orderId'],
 ]);
 
 it('accepts http URLs; the gateway may still require HTTPS in production', function () {
-    $payment = $this->gateway->initiate(new CyberSourcePaymentData('ORDER-4', 1000, 'http://shop.test/cb', returnUrl: 'http://shop.test/done', cancelUrl: 'http://shop.test/cancel'));
+    $payment = $this->gateway->initiate(new CyberSourcePaymentData('ORDER-4', 1000, 'http://shop.test/cb', 'MMK', CyberSourceTransactionType::Sale, 'en-us', returnUrl: 'http://shop.test/done', cancelUrl: 'http://shop.test/cancel'));
 
     expect($payment->fields['override_backoffice_post_url'])->toBe('http://shop.test/cb');
 });
 
 it('accepts a zero amount, as Secure Acceptance allows', function () {
-    expect($this->gateway->initiate(new CyberSourcePaymentData('ORDER-3', Amount::parse('0.00'), 'https://shop.test/cb'))->fields['amount'])->toBe('0.00');
+    expect($this->gateway->initiate(new CyberSourcePaymentData('ORDER-3', Amount::parse('0.00'), 'https://shop.test/cb', 'MMK', CyberSourceTransactionType::Sale, 'en-us'))->fields['amount'])->toBe('0.00');
 });
 
 it('reads only signed fields, so unsigned extras cannot change the result', function () {
@@ -147,21 +149,27 @@ it('rejects a callback whose signature or signed values are not strings', functi
 ])->throws(SignatureVerificationException::class);
 
 it('rejects a currency or locale followed by a newline', function () {
-    new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cb', currency: "USD\n");
+    new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cb', currency: "USD\n", transactionType: CyberSourceTransactionType::Sale, locale: 'en-us');
 })->throws(InvalidPaymentDataException::class, 'currency');
 
 it('falls back to req_amount when auth_amount is empty', function () {
     expect($this->gateway->handleCallback(cyberSourceCallback(['auth_amount' => '', 'decision' => 'DECLINE']))->amount)->toBe('1000.00');
 });
 
-it('uses the default currency and locale when they are blank', function () {
-    $data = new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cb', currency: '', locale: '');
+it('requires the currency and locale', function () {
+    try {
+        new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cb', currency: '', transactionType: CyberSourceTransactionType::Sale, locale: '');
+    } catch (InvalidPaymentDataException $e) {
+        expect($e->errors())->toBe(['currency' => 'The currency field is required.', 'locale' => 'The locale field is required.']);
 
-    expect($data->currency)->toBe('MMK')->and($data->locale)->toBe('en-us');
+        return;
+    }
+
+    $this->fail('No validation error was thrown.');
 });
 
 it('rejects a re-posted checkout form with an unsigned decision added', function () {
-    $payment = $this->gateway->initiate(new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cs/callback'));
+    $payment = $this->gateway->initiate(new CyberSourcePaymentData(orderId: 'ORDER-1', amount: 1000, callbackUrl: 'https://shop.test/cs/callback', currency: 'MMK', transactionType: CyberSourceTransactionType::Sale, locale: 'en-us'));
     $fields = $payment->fields + ['decision' => 'ACCEPT', 'req_reference_number' => 'ORDER-1'];
 
     $this->gateway->handleCallback(new CallbackRequest(http_build_query($fields)));

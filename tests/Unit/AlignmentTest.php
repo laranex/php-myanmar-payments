@@ -11,6 +11,7 @@ use Laranex\PhpMyanmarPayments\AyaPay\AyaPayPaymentData;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSource;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSourceConfig;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSourcePaymentData;
+use Laranex\PhpMyanmarPayments\CyberSource\CyberSourceTransactionType;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
@@ -40,14 +41,14 @@ use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrPaymentData;
 function fullEnv(): array
 {
     return [
-        'KBZ_PAY_APP_ID' => 'app', 'KBZ_PAY_APP_KEY' => 'key', 'KBZ_PAY_MERCHANT_CODE' => 'merchant', 'KBZ_PAY_SANDBOX' => 'false',
+        'KBZ_PAY_APP_ID' => 'app', 'KBZ_PAY_APP_KEY' => 'key', 'KBZ_PAY_MERCHANT_CODE' => 'merchant', 'MYANMAR_PAYMENTS_HTTP_TIMEOUT' => ' 20 ',
         'KBZ_PAY_BASE_URL' => 'https://kbz.test/', 'KBZ_PAY_PWA_BASE_REDIRECT_URL' => 'https://pwa.test/#',
-        'WAVE_MONEY_MERCHANT_ID' => 'm', 'WAVE_MONEY_SECRET_KEY' => 's', 'APP_NAME' => 'Shop', 'WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS' => ' 600 ',
-        'WAVE_MONEY_SANDBOX' => 'no', 'WAVE_MONEY_BASE_URL' => 'https://wave.test', 'WAVE_MONEY_AUTHENTICATE_URL' => 'https://wave-auth.test',
-        'AYA_PGW_APP_KEY' => 'k', 'AYA_PAY_APP_SECRET' => 's', 'AYA_PAY_SANDBOX' => 'off', 'AYA_PGW_BASE_URL' => 'https://aya.test',
+        'WAVE_MONEY_MERCHANT_ID' => 'm', 'WAVE_MONEY_SECRET_KEY' => 's', 'WAVE_MONEY_MERCHANT_NAME' => 'Shop', 'WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS' => ' 600 ',
+        'WAVE_MONEY_BASE_URL' => 'https://wave.test', 'WAVE_MONEY_AUTHENTICATE_URL' => 'https://wave-auth.test',
+        'AYA_PGW_APP_KEY' => 'k', 'AYA_PAY_APP_SECRET' => 's', 'AYA_PGW_BASE_URL' => 'https://aya.test',
         'YOMA_MMQR_MERCHANT_ID' => 'm', 'YOMA_MMQR_CLIENT_ID' => 'c', 'YOMA_MMQR_CLIENT_SECRET' => 's', 'YOMA_MMQR_WEBHOOK_HASHKEY' => 'h',
-        'YOMA_MMQR_WEBHOOK_SECRET' => 'shared', 'YOMA_MMQR_SANDBOX' => '0', 'YOMA_MMQR_BASE_URL' => 'https://yoma.test', 'YOMA_MMQR_API_VERSION' => 'v2',
-        'CYBER_SOURCE_PROFILE_ID' => 'p', 'CYBER_SOURCE_ACCESS_KEY' => 'a', 'CYBER_SOURCE_SECRET_KEY' => 's', 'CYBER_SOURCE_SANDBOX' => 'F',
+        'YOMA_MMQR_WEBHOOK_SECRET' => 'shared', 'YOMA_MMQR_BASE_URL' => 'https://yoma.test', 'YOMA_MMQR_API_VERSION' => 'v2',
+        'CYBER_SOURCE_PROFILE_ID' => 'p', 'CYBER_SOURCE_ACCESS_KEY' => 'a', 'CYBER_SOURCE_SECRET_KEY' => 's',
         'CYBER_SOURCE_BASE_URL' => 'https://cs.test',
     ];
 }
@@ -60,11 +61,11 @@ it('reads every gateway from the same environment variables as the other SDKs', 
     $yoma = YomaMmqrConfig::fromEnv($env);
     $cs = CyberSourceConfig::fromEnv($env);
 
-    expect([$kbz->appId, $kbz->appKey, $kbz->merchantCode, $kbz->sandbox, $kbz->apiUrl, $kbz->pwaUrl])->toBe(['app', 'key', 'merchant', false, 'https://kbz.test', 'https://pwa.test/#/'])
-        ->and([$wave->merchantName, $wave->timeToLiveSeconds, $wave->sandbox, $wave->baseUrl, $wave->authenticateUrl])->toBe(['Shop', 600, false, 'https://wave.test', 'https://wave-auth.test'])
-        ->and([$aya->appKey, $aya->sandbox, $aya->baseUrl])->toBe(['k', false, 'https://aya.test'])
-        ->and([$yoma->webhookSecret, $yoma->sandbox, $yoma->baseUrl, $yoma->apiVersion])->toBe(['shared', false, 'https://yoma.test', 'v2'])
-        ->and([$cs->profileId, $cs->sandbox, $cs->baseUrl])->toBe(['p', false, 'https://cs.test']);
+    expect([$kbz->appId, $kbz->appKey, $kbz->merchantCode, $kbz->timeoutSeconds, $kbz->apiUrl, $kbz->pwaUrl])->toBe(['app', 'key', 'merchant', 20, 'https://kbz.test', 'https://pwa.test/#/'])
+        ->and([$wave->merchantName, $wave->timeToLiveSeconds, $wave->timeoutSeconds, $wave->baseUrl, $wave->authenticateUrl])->toBe(['Shop', 600, 20, 'https://wave.test', 'https://wave-auth.test'])
+        ->and([$aya->appKey, $aya->timeoutSeconds, $aya->baseUrl])->toBe(['k', 20, 'https://aya.test'])
+        ->and([$yoma->webhookSecret, $yoma->timeoutSeconds, $yoma->baseUrl, $yoma->apiVersion])->toBe(['shared', 20, 'https://yoma.test', 'v2'])
+        ->and([$cs->profileId, $cs->baseUrl])->toBe(['p', 'https://cs.test']);
 });
 
 it('builds gateways and the facade from the environment', function () {
@@ -101,15 +102,15 @@ it('reads the real environment by default', function () {
 });
 
 it('accepts a config array or object for every gateway and facade entry', function () {
-    $kbz = new KbzPayConfig('app', 'key', 'merchant');
+    $kbz = new KbzPayConfig('app', 'key', 'merchant', 30);
     $payments = new MyanmarPayments(['kbz_pay' => $kbz, 'cyber_source' => ['profile_id' => 'p', 'access_key' => 'a', 'secret_key' => 's']], mockHttp());
 
     expect($payments->kbzPay()->config)->toBe($kbz)
         ->and($payments->cyberSource()->config->profileId)->toBe('p')
-        ->and((new KbzPay(['app_id' => 'a', 'app_key' => 'k', 'merchant_code' => 'm'], mockHttp()))->config->appId)->toBe('a')
-        ->and((new WaveMoney(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop'], mockHttp()))->config->merchantName)->toBe('Shop')
-        ->and((new AyaPay(['app_key' => 'k', 'app_secret' => 's'], mockHttp()))->config->appKey)->toBe('k')
-        ->and((new YomaMmqr(['merchant_id' => 'm', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h'], mockHttp()))->config->merchantId)->toBe('m')
+        ->and((new KbzPay(['app_id' => 'a', 'app_key' => 'k', 'merchant_code' => 'm', 'timeout_in_seconds' => 30], mockHttp()))->config->appId)->toBe('a')
+        ->and((new WaveMoney(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => 300, 'timeout_in_seconds' => 30], mockHttp()))->config->merchantName)->toBe('Shop')
+        ->and((new AyaPay(['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => 30], mockHttp()))->config->appKey)->toBe('k')
+        ->and((new YomaMmqr(['merchant_id' => 'm', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h', 'api_version' => 'v1rc', 'timeout_in_seconds' => 30], mockHttp()))->config->merchantId)->toBe('m')
         ->and((new CyberSource(['profile_id' => 'p', 'access_key' => 'a', 'secret_key' => 's']))->config->accessKey)->toBe('a');
 });
 
@@ -125,34 +126,43 @@ it('rejects blank credentials in config constructors, naming the gateway and key
 
     test()->fail('Expected a ConfigurationException.');
 })->with([
-    [fn () => new KbzPayConfig('a', ' ', 'm'), 'kbz_pay', 'app_key'],
-    [fn () => new WaveMoneyConfig('m', 's', ''), 'wave_money', 'merchant_name'],
-    [fn () => new AyaPayConfig('', 's'), 'aya_pay', 'app_key'],
-    [fn () => new YomaMmqrConfig('m', 'c', 's', ''), 'yoma_mmqr', 'webhook_hashkey'],
+    [fn () => new KbzPayConfig('a', ' ', 'm', 30), 'kbz_pay', 'app_key'],
+    [fn () => new WaveMoneyConfig('m', 's', '', 300, 30), 'wave_money', 'merchant_name'],
+    [fn () => new AyaPayConfig('', 's', 30), 'aya_pay', 'app_key'],
+    [fn () => new YomaMmqrConfig('m', 'c', 's', '', 'v1rc', 30), 'yoma_mmqr', 'webhook_hashkey'],
+    [fn () => new YomaMmqrConfig('m', 'c', 's', 'h', '', 30), 'yoma_mmqr', 'api_version'],
     [fn () => new CyberSourceConfig('p', 'a', "\t"), 'cyber_source', 'secret_key'],
     [fn () => WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => '  ']), 'wave_money', 'secret_key'],
 ]);
 
 it('treats blank overrides as unset', function () {
-    $yoma = new YomaMmqrConfig('m', 'c', 's', 'h', webhookSecret: '', baseUrl: ' ', apiVersion: '');
+    $yoma = new YomaMmqrConfig('m', 'c', 's', 'h', 'v1rc', 30, webhookSecret: '', baseUrl: ' ');
 
-    expect((new KbzPayConfig('a', 'k', 'm', apiUrl: '', pwaUrl: ''))->apiUrl)->toBe(KbzPayConfig::SANDBOX_API_URL)
-        ->and((new WaveMoneyConfig('m', 's', 'Shop', baseUrl: '', authenticateUrl: ''))->authenticateUrl)->toBe(WaveMoneyConfig::SANDBOX_AUTHENTICATE_URL)
-        ->and((new AyaPayConfig('k', 's', baseUrl: ''))->baseUrl)->toBe(AyaPayConfig::SANDBOX_URL)
-        ->and((new CyberSourceConfig('p', 'a', 's', baseUrl: ''))->baseUrl)->toBe(CyberSourceConfig::SANDBOX_URL)
-        ->and([$yoma->webhookSecret, $yoma->baseUrl, $yoma->apiVersion])->toBe([null, YomaMmqrConfig::SANDBOX_URL, 'v1rc']);
+    expect((new KbzPayConfig('a', 'k', 'm', 30, apiUrl: '', pwaUrl: ''))->apiUrl)->toBe(KbzPayConfig::PRODUCTION_API_URL)
+        ->and((new WaveMoneyConfig('m', 's', 'Shop', 300, 30, baseUrl: '', authenticateUrl: ''))->authenticateUrl)->toBe(WaveMoneyConfig::PRODUCTION_AUTHENTICATE_URL)
+        ->and((new AyaPayConfig('k', 's', 30, baseUrl: ''))->baseUrl)->toBe(AyaPayConfig::PRODUCTION_URL)
+        ->and((new CyberSourceConfig('p', 'a', 's', baseUrl: ''))->baseUrl)->toBe(CyberSourceConfig::PRODUCTION_URL)
+        ->and([$yoma->webhookSecret, $yoma->baseUrl, $yoma->apiVersion])->toBe([null, YomaMmqrConfig::PRODUCTION_URL, 'v1rc']);
 });
 
-it('reads the time to live only from integer values', function (mixed $value, int $seconds) {
-    expect(WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => $value])->timeToLiveSeconds)->toBe($seconds);
-})->with([[600, 600], ['600', 600], [' 600 ', 600], ['60abc', 300], ['6e2', 300], [-5, 300], [true, 300]]);
+it('reads the time to live only from whole numbers greater than 0', function (mixed $value, ?int $seconds) {
+    $build = fn () => WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => $value, 'timeout_in_seconds' => 30]);
 
-it('uses Guzzle with a 30 second timeout when no client is given', function () {
-    $client = Transport::defaultClient();
+    if ($seconds === null) {
+        expect($build)->toThrow(ConfigurationException::class, '[time_to_live_in_seconds] must be a whole number greater than 0.');
+
+        return;
+    }
+
+    expect($build()->timeToLiveSeconds)->toBe($seconds);
+})->with([[600, 600], ['600', 600], [' 600 ', 600], ['60abc', null], ['6e2', null], [-5, null], [true, null]]);
+
+it('uses Guzzle with the configured timeout when no client is given', function () {
+    $client = Transport::defaultClient(12);
 
     expect($client)->toBeInstanceOf(Guzzle::class)
-        ->and((fn (): mixed => $this->config['timeout'])->call($client))->toBe(30)
-        ->and(new KbzPay(new KbzPayConfig('a', 'k', 'm')))->toBeInstanceOf(KbzPay::class);
+        ->and((fn (): mixed => $this->config['timeout'])->call($client))->toBe(12)
+        ->and(new KbzPay(new KbzPayConfig('a', 'k', 'm', 30)))->toBeInstanceOf(KbzPay::class);
 });
 
 it('keys Wave item errors by their position', function () {
@@ -171,7 +181,7 @@ it('keys Wave item errors by their position', function () {
 });
 
 it('exposes the KBZ signer and signs false as text', function () {
-    $kbz = new KbzPay(new KbzPayConfig('a', 'key', 'm'), mockHttp());
+    $kbz = new KbzPay(new KbzPayConfig('a', 'key', 'm', 30), mockHttp());
 
     expect($kbz->signer)->toBeInstanceOf(KbzPaySigner::class)
         ->and($kbz->signer->signString(['b' => false, 'a' => true, 'c' => '', 'd' => null]))->toBe('a=true&b=false');
@@ -180,22 +190,22 @@ it('exposes the KBZ signer and signs false as text', function () {
 it('ends gateway error messages without a trailing space', function () {
     $http = mockHttp(jsonResponse(['Response' => ['result' => 'FAIL', 'code' => 'AUTH_ERROR']]));
 
-    expect(fn () => (new KbzPay(new KbzPayConfig('a', 'k', 'm'), $http))->status('O1'))
+    expect(fn () => (new KbzPay(new KbzPayConfig('a', 'k', 'm', 30), $http))->status('O1'))
         ->toThrow(ApiException::class, 'KBZ Pay queryorder failed: [AUTH_ERROR]');
 
     try {
-        (new AyaPay(new AyaPayConfig('k', 's'), mockHttp(jsonResponse(['status' => '09']))))->services();
+        (new AyaPay(new AyaPayConfig('k', 's', 30), mockHttp(jsonResponse(['status' => '09']))))->services();
     } catch (ApiException $e) {
         expect($e->getMessage())->toBe('AYA Pay services failed: [09]');
     }
 });
 
 it('falls back to the requested id or key when the gateway sends an empty one', function () {
-    $services = (new AyaPay(new AyaPayConfig('k', 's'), mockHttp(jsonResponse([
+    $services = (new AyaPay(new AyaPayConfig('k', 's', 30), mockHttp(jsonResponse([
         'status' => '00', 'data' => [['key' => 'visa', 'name' => '', 'methods' => ['WEB', ['x']]]],
     ]))))->services();
 
-    $yoma = (new YomaMmqr(new YomaMmqrConfig('m', 'c', 's', 'h'), mockHttp(
+    $yoma = (new YomaMmqr(new YomaMmqrConfig('m', 'c', 's', 'h', 'v1rc', 30), mockHttp(
         jsonResponse(['access_token' => 't', 'expires_in' => 60]),
         jsonResponse(['refLabel' => '', 'paymentStatus' => 'SUCCESS']),
     )))->status('REF-1');
@@ -209,7 +219,7 @@ it('lists Wave validation errors in field order', function () {
     $http = mockHttp(jsonResponse(['errors' => ['order_id' => ['Taken.'], 'amount' => ['Too low.', 'Not whole.']]], 422));
     $data = new WaveMoneyPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 10)]);
 
-    expect(fn () => (new WaveMoney(new WaveMoneyConfig('m', 's', 'Shop'), $http))->initiate($data))
+    expect(fn () => (new WaveMoney(new WaveMoneyConfig('m', 's', 'Shop', 300, 30), $http))->initiate($data))
         ->toThrow(ApiException::class, 'Wave Money payment request failed with HTTP 422: amount: Too low. Not whole.; order_id: Taken.');
 });
 
@@ -251,6 +261,6 @@ it('validates payment data again on demand', function () {
 
     expect(fn () => (new YomaMmqrPaymentData('O1', 1, 'x'))->validate())->not->toThrow(InvalidPaymentDataException::class)
         ->and(fn () => (new AyaPayPaymentData('ORDER1', 1, 'aya_pay', AyaPayMethod::Qr))->validate())->not->toThrow(InvalidPaymentDataException::class)
-        ->and(fn () => (new CyberSourcePaymentData('O1', 1, 'https://shop.test/cb'))->validate())->not->toThrow(InvalidPaymentDataException::class)
+        ->and(fn () => (new CyberSourcePaymentData('O1', 1, 'https://shop.test/cb', 'MMK', CyberSourceTransactionType::Sale, 'en-us'))->validate())->not->toThrow(InvalidPaymentDataException::class)
         ->and(fn () => (new WaveMoneyPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 10)]))->validate())->not->toThrow(InvalidPaymentDataException::class);
 });

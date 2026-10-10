@@ -27,28 +27,24 @@ final class Transport
     private readonly StreamFactoryInterface $streamFactory;
 
     /**
-     * Seconds before the default Guzzle client gives up, like the Go, Node and Python SDKs.
-     */
-    public const DEFAULT_TIMEOUT = 30;
-
-    /**
-     * Without a client, Guzzle is used with a 30 second timeout when it is installed; otherwise any discovered
-     * PSR-18 client, with its own timeout.
+     * Without a client, Guzzle is used with a `$timeoutSeconds` timeout when it is installed; otherwise any
+     * discovered PSR-18 client, with its own timeout. A client you pass keeps its own timeout.
      */
     public function __construct(
-        ?ClientInterface $client = null,
+        ?ClientInterface $client,
+        int $timeoutSeconds,
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null,
     ) {
-        $this->client = $client ?? self::defaultClient();
+        $this->client = $client ?? self::defaultClient($timeoutSeconds);
         $this->requestFactory = $requestFactory ?? Psr17FactoryDiscovery::findRequestFactory();
         $this->streamFactory = $streamFactory ?? Psr17FactoryDiscovery::findStreamFactory();
     }
 
-    public static function defaultClient(): ClientInterface
+    public static function defaultClient(int $timeoutSeconds): ClientInterface
     {
         if (class_exists(Guzzle::class)) {
-            return new Guzzle(['timeout' => self::DEFAULT_TIMEOUT]);
+            return new Guzzle(['timeout' => $timeoutSeconds]);
         }
 
         return Psr18ClientDiscovery::find(); // @codeCoverageIgnore
