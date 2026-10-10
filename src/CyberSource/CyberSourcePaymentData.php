@@ -19,38 +19,26 @@ final class CyberSourcePaymentData
     public readonly Amount $amount;
 
     /**
-     * ISO 4217 currency code in use.
-     */
-    public readonly string $currency;
-
-    /**
-     * Language of the hosted page in use.
-     */
-    public readonly string $locale;
-
-    /**
      * @param  string  $orderId  Your order id (`reference_number`), at most 50 characters. Echoed back as `req_reference_number`.
      * @param  Amount|int  $amount  Order total in `$currency`, e.g. `Amount::parse('10.50')`. Decimals allowed, at most 15 characters.
      * @param  string  $callbackUrl  URL CyberSource posts the result to (`override_backoffice_post_url`), at most 255 characters.
+     * @param  string  $currency  ISO 4217 currency code, e.g. `MMK`.
+     * @param  CyberSourceTransactionType  $transactionType  What CyberSource does with the card, e.g. `CyberSourceTransactionType::Sale`.
+     * @param  string  $locale  Language of the hosted page, e.g. `en-us`.
      * @param  string|null  $returnUrl  Receipt page the customer is sent to (`override_custom_receipt_page`), at most 255 characters.
      * @param  string|null  $cancelUrl  Page the customer is sent to on cancel (`override_custom_cancel_page`), at most 255 characters.
-     * @param  string  $currency  ISO 4217 currency code. Blank means `MMK`.
-     * @param  CyberSourceTransactionType  $transactionType  What CyberSource does with the card.
-     * @param  string  $locale  Language of the hosted page, e.g. `en-us`. Blank means `en-us`.
      */
     public function __construct(
         public readonly string $orderId,
         Amount|int $amount,
         public readonly string $callbackUrl,
+        public readonly string $currency,
+        public readonly CyberSourceTransactionType $transactionType,
+        public readonly string $locale,
         public readonly ?string $returnUrl = null,
         public readonly ?string $cancelUrl = null,
-        string $currency = 'MMK',
-        public readonly CyberSourceTransactionType $transactionType = CyberSourceTransactionType::Sale,
-        string $locale = 'en-us',
     ) {
         $this->amount = Amount::from($amount);
-        $this->currency = $currency === '' ? 'MMK' : $currency;
-        $this->locale = $locale === '' ? 'en-us' : $locale;
 
         $this->validate();
     }
@@ -73,7 +61,9 @@ final class CyberSourcePaymentData
             ->max('returnUrl', $this->returnUrl, 255)
             ->url('cancelUrl', $this->cancelUrl)
             ->max('cancelUrl', $this->cancelUrl, 255)
+            ->required('currency', $this->currency)
             ->pattern('currency', $this->currency, '/^[A-Z]{3}\z/', 'a three letter ISO 4217 code')
+            ->required('locale', $this->locale)
             ->pattern('locale', $this->locale, '/^[a-z]{2}-[a-z]{2}\z/', 'a locale code such as en-us')
             ->validate();
     }

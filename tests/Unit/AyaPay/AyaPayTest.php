@@ -13,7 +13,7 @@ use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 
 beforeEach(function () {
-    $this->config = new AyaPayConfig(appKey: 'app-key', appSecret: 'test-secret');
+    $this->config = new AyaPayConfig(appKey: 'app-key', appSecret: 'test-secret', timeoutSeconds: 30);
     $this->vector = testVector('aya_pay/callback_payload.json');
 });
 
@@ -41,7 +41,7 @@ it('signs the hosted checkout form in the documented field order', function () {
         'ORD123456', '1000', 'app-key', $fields['timestamp'], 'cart-9', '', '', '', '', 'Order', '104', 'kbz_pay', 'QR', 'https://shop.test/done',
     ]), 'test-secret');
 
-    expect($payment->action)->toBe('https://uat-pgw.ayainnovation.com/v1/payment/request')
+    expect($payment->action)->toBe('https://pgw.ayainnovation.com/v1/payment/request')
         ->and($payment->enctype)->toBe('multipart/form-data')
         ->and($fields['channel'])->toBe('kbz_pay')
         ->and($fields['checkSum'])->toBe($expected)

@@ -9,15 +9,11 @@ use Laranex\PhpMyanmarPayments\Support\Config;
 use Laranex\PhpMyanmarPayments\Support\Env;
 
 /**
- * Credentials and endpoints for Yoma Bank MMQR.
+ * Credentials and endpoints for Yoma Bank MMQR. To test against UAT, set the URL override to the UAT URL.
  */
 final class YomaMmqrConfig
 {
-    public const SANDBOX_URL = 'https://devapi.yomabank.net';
-
     public const PRODUCTION_URL = 'https://paymenthubapi.yomabank.com';
-
-    public const DEFAULT_API_VERSION = 'v1rc';
 
     public readonly string $baseUrl;
 
@@ -27,46 +23,42 @@ final class YomaMmqrConfig
     public readonly ?string $webhookSecret;
 
     /**
-     * The `{version}` segment of the API paths in use.
-     */
-    public readonly string $apiVersion;
-
-    /**
      * @param  string  $merchantId  The merchant id Yoma issued.
      * @param  string  $clientId  OAuth client id.
      * @param  string  $clientSecret  OAuth client secret.
      * @param  string  $webhookHashKey  The hash key Yoma issued for verifying callbacks.
+     * @param  string  $apiVersion  The `{version}` segment of the API paths, e.g. `v1rc`.
+     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up. A client you pass keeps its own timeout.
      * @param  string|null  $webhookSecret  The secret you shared with Yoma; when set, callbacks must carry it in `X-Webhook-Secret`.
-     * @param  bool  $sandbox  Use the UAT environment instead of production.
-     * @param  string|null  $baseUrl  Override the API base URL.
-     * @param  string  $apiVersion  The `{version}` segment of the API paths. Blank means `v1rc`.
+     * @param  string|null  $baseUrl  Override the API base URL; production when unset.
      *
-     * @throws ConfigurationException When a credential is blank.
+     * @throws ConfigurationException When a setting is blank or the timeout is not greater than 0.
      */
     public function __construct(
         public readonly string $merchantId,
         public readonly string $clientId,
         public readonly string $clientSecret,
         public readonly string $webhookHashKey,
+        public readonly string $apiVersion,
+        public readonly int $timeoutSeconds,
         ?string $webhookSecret = null,
-        public readonly bool $sandbox = true,
         ?string $baseUrl = null,
-        string $apiVersion = self::DEFAULT_API_VERSION,
     ) {
         Config::requireValue('yoma_mmqr', 'merchant_id', $merchantId);
         Config::requireValue('yoma_mmqr', 'client_id', $clientId);
         Config::requireValue('yoma_mmqr', 'client_secret', $clientSecret);
         Config::requireValue('yoma_mmqr', 'webhook_hashkey', $webhookHashKey);
+        Config::requireValue('yoma_mmqr', 'api_version', $apiVersion);
+        Config::requirePositive('yoma_mmqr', 'timeout_in_seconds', $timeoutSeconds);
 
         $this->webhookSecret = Config::optionalValue($webhookSecret);
-        $this->baseUrl = rtrim(Config::optionalValue($baseUrl) ?? ($sandbox ? self::SANDBOX_URL : self::PRODUCTION_URL), '/');
-        $this->apiVersion = Config::optionalValue($apiVersion) ?? self::DEFAULT_API_VERSION;
+        $this->baseUrl = rtrim(Config::optionalValue($baseUrl) ?? self::PRODUCTION_URL, '/');
     }
 
     /**
-     * @param  array{merchant_id?: string|null, client_id?: string|null, client_secret?: string|null, webhook_hashkey?: string|null, webhook_secret?: string|null, sandbox?: bool|string|null, base_url?: string|null, api_version?: string|null}  $config
+     * @param  array{merchant_id?: string|null, client_id?: string|null, client_secret?: string|null, webhook_hashkey?: string|null, api_version?: string|null, timeout_in_seconds?: int|string|null, webhook_secret?: string|null, base_url?: string|null}  $config
      *
-     * @throws ConfigurationException When a credential is missing.
+     * @throws ConfigurationException When a setting is missing or invalid.
      */
     public static function fromArray(array $config): self
     {
@@ -77,20 +69,20 @@ final class YomaMmqrConfig
             clientId: $config->required('client_id'),
             clientSecret: $config->required('client_secret'),
             webhookHashKey: $config->required('webhook_hashkey'),
+            apiVersion: $config->required('api_version'),
+            timeoutSeconds: $config->seconds('timeout_in_seconds'),
             webhookSecret: $config->string('webhook_secret'),
-            sandbox: $config->bool('sandbox', true),
             baseUrl: $config->string('base_url'),
-            apiVersion: (string) $config->string('api_version', self::DEFAULT_API_VERSION),
         );
     }
 
     /**
      * Read `YOMA_MMQR_MERCHANT_ID`, `YOMA_MMQR_CLIENT_ID`, `YOMA_MMQR_CLIENT_SECRET`, `YOMA_MMQR_WEBHOOK_HASHKEY`,
-     * `YOMA_MMQR_WEBHOOK_SECRET`, `YOMA_MMQR_SANDBOX`, `YOMA_MMQR_BASE_URL` and `YOMA_MMQR_API_VERSION`.
+     * `YOMA_MMQR_API_VERSION`, `MYANMAR_PAYMENTS_HTTP_TIMEOUT`, `YOMA_MMQR_WEBHOOK_SECRET` and `YOMA_MMQR_BASE_URL`.
      *
      * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
      *
-     * @throws ConfigurationException When a credential is missing.
+     * @throws ConfigurationException When a setting is missing or invalid.
      */
     public static function fromEnv(?array $env = null): self
     {
@@ -101,10 +93,10 @@ final class YomaMmqrConfig
             'client_id' => $env->first('YOMA_MMQR_CLIENT_ID'),
             'client_secret' => $env->first('YOMA_MMQR_CLIENT_SECRET'),
             'webhook_hashkey' => $env->first('YOMA_MMQR_WEBHOOK_HASHKEY'),
-            'webhook_secret' => $env->first('YOMA_MMQR_WEBHOOK_SECRET'),
-            'sandbox' => $env->first('YOMA_MMQR_SANDBOX'),
-            'base_url' => $env->first('YOMA_MMQR_BASE_URL'),
             'api_version' => $env->first('YOMA_MMQR_API_VERSION'),
+            'timeout_in_seconds' => $env->first('MYANMAR_PAYMENTS_HTTP_TIMEOUT'),
+            'webhook_secret' => $env->first('YOMA_MMQR_WEBHOOK_SECRET'),
+            'base_url' => $env->first('YOMA_MMQR_BASE_URL'),
         ]);
     }
 }

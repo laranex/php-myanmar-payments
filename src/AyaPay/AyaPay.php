@@ -49,7 +49,7 @@ class AyaPay implements PaymentGateway
         ?ClientInterface $httpClient = null,
     ) {
         $this->config = $config instanceof AyaPayConfig ? $config : AyaPayConfig::fromArray($config);
-        $this->transport = new Transport($httpClient);
+        $this->transport = new Transport($httpClient, $this->config->timeoutSeconds);
         $this->signer = new AyaPaySigner($this->config->appSecret);
     }
 

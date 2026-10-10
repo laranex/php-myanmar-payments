@@ -63,7 +63,7 @@ class YomaMmqr implements PaymentGateway
         ?CacheInterface $cache = null,
     ) {
         $this->config = $config instanceof YomaMmqrConfig ? $config : YomaMmqrConfig::fromArray($config);
-        $this->transport = new Transport($httpClient);
+        $this->transport = new Transport($httpClient, $this->config->timeoutSeconds);
         $this->cache = $cache ?? new ArrayCache;
     }
 

@@ -40,17 +40,27 @@ final class Config
     }
 
     /**
-     * An integer or integer text such as `"300"`; anything else is the default.
+     * A whole number greater than 0, given as an integer or integer text such as `"300"`.
+     *
+     * @throws ConfigurationException When the value is missing, blank or not a whole number greater than 0.
      */
-    public function int(string $key, int $default): int
+    public function seconds(string $key): int
     {
         $value = $this->config[$key] ?? null;
 
-        if (is_int($value)) {
-            return $value;
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            throw ConfigurationException::missing($this->gateway, $key);
         }
 
-        return is_string($value) && preg_match('/^[+-]?[0-9]+\z/', trim($value)) === 1 ? (int) trim($value) : $default;
+        if (is_string($value) && preg_match('/^[+-]?[0-9]+\z/', trim($value)) === 1) {
+            $value = (int) trim($value);
+        }
+
+        if (! is_int($value) || $value <= 0) {
+            throw ConfigurationException::invalid($this->gateway, $key);
+        }
+
+        return $value;
     }
 
     /**
@@ -66,32 +76,22 @@ final class Config
     }
 
     /**
+     * A whole number of seconds the constructor was given: zero or less is invalid.
+     */
+    public static function requirePositive(string $gateway, string $key, int $value): int
+    {
+        if ($value <= 0) {
+            throw ConfigurationException::invalid($gateway, $key);
+        }
+
+        return $value;
+    }
+
+    /**
      * An optional override: blank means unset.
      */
     public static function optionalValue(?string $value): ?string
     {
         return $value === null || trim($value) === '' ? null : $value;
-    }
-
-    /**
-     * `true`/`1`/`t`/`yes`/`on` and `false`/`0`/`f`/`no`/`off` in any case; anything else is the default.
-     */
-    public function bool(string $key, bool $default): bool
-    {
-        $value = $this->config[$key] ?? null;
-
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        if (! is_scalar($value)) {
-            return $default;
-        }
-
-        return match (strtolower(trim((string) $value))) {
-            'true', '1', 't', 'yes', 'on' => true,
-            'false', '0', 'f', 'no', 'off' => false,
-            default => $default,
-        };
     }
 }

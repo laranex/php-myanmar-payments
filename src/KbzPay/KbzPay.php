@@ -53,7 +53,7 @@ class KbzPay implements PaymentGateway
         ?ClientInterface $httpClient = null,
     ) {
         $this->config = $config instanceof KbzPayConfig ? $config : KbzPayConfig::fromArray($config);
-        $this->transport = new Transport($httpClient);
+        $this->transport = new Transport($httpClient, $this->config->timeoutSeconds);
         $this->signer = new KbzPaySigner($this->config->appKey);
     }
 

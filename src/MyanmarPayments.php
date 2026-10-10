@@ -51,7 +51,7 @@ class MyanmarPayments
 
     /**
      * Read every gateway's configuration from environment variables (`KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*`,
-     * `YOMA_MMQR_*`, `CYBER_SOURCE_*`) when the gateway is first used.
+     * `YOMA_MMQR_*`, `CYBER_SOURCE_*` and `MYANMAR_PAYMENTS_HTTP_TIMEOUT`) when the gateway is first used.
      *
      * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
      */
