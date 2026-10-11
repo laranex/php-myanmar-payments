@@ -243,7 +243,8 @@ it('uses the same messages as every other SDK', function () {
     expect($errors(fn () => new WaveMoneyPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 10)], Amount::parse('10.5')))['amount'])->toBe($messages['whole_amounts_only'])
         ->and($errors(fn () => new AyaPayPaymentData('ORDER123', Amount::parse('10.5'), 'aya_pay', AyaPayMethod::Qr))['amount'])->toBe($messages['aya_whole_amounts_only'])
         ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', Amount::parse('1.505'), 'https://shop.test/cb'))['amount'])->toBe($messages['kbz_decimals'])
-        ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeoutMinutes: 0))['timeoutMinutes'])->toBe($messages['kbz_timeout_zero']);
+        ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveSeconds: 0))['timeToLiveSeconds'])->toBe($messages['kbz_time_to_live_range'])
+        ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveSeconds: 90))['timeToLiveSeconds'])->toBe($messages['kbz_time_to_live_minutes']);
 });
 
 it('applies per-payment Wave Money overrides like every other SDK', function () {

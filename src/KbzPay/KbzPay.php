@@ -107,7 +107,7 @@ class KbzPay implements PaymentGateway
         return new QrPayment(
             orderId: $data->orderId,
             qrString: $qrCode,
-            expiresAt: $data->timeoutMinutes === null ? null : new DateTimeImmutable("+{$data->timeoutMinutes} minutes"),
+            expiresAt: $data->timeToLiveSeconds === null ? null : new DateTimeImmutable("+{$data->timeToLiveSeconds} seconds"),
             reference: $order['prepay_id'],
             raw: $order['response'],
         );
@@ -199,7 +199,7 @@ class KbzPay implements PaymentGateway
             'total_amount' => $data->amount->toString(),
             'trans_currency' => 'MMK',
             'title' => $data->title,
-            'timeout_express' => $data->timeoutMinutes === null ? null : $data->timeoutMinutes.'m',
+            'timeout_express' => $data->timeToLiveSeconds === null ? null : intdiv($data->timeToLiveSeconds, 60).'m',
             'callback_info' => $data->callbackInfo === null ? null : urlencode($data->callbackInfo),
         ], fn (?string $value): bool => $value !== null && $value !== '');
 

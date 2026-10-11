@@ -89,7 +89,7 @@ it('sends optional order fields inside biz_content', function () {
     $http = mockHttp(jsonResponse(precreateResponse()));
 
     (new KbzPay($this->config, $http))->pwa(new KbzPayPaymentData(
-        orderId: 'ORDER_1', amount: 1000, callbackUrl: 'https://shop.test/cb', title: 'Shoes', timeoutMinutes: 30, callbackInfo: 'cart=9',
+        orderId: 'ORDER_1', amount: 1000, callbackUrl: 'https://shop.test/cb', title: 'Shoes', timeToLiveSeconds: 1800, callbackInfo: 'cart=9',
     ));
 
     expect(requestJson($http->getLastRequest())['Request']['biz_content'])
@@ -172,7 +172,9 @@ it('validates the order against KBZ limits', function (array $overrides, string 
     'three decimals' => [['amount' => Amount::parse('1000.505')], 'amount'],
     'negative' => [['amount' => -5], 'amount'],
     'callback url with query' => [['callbackUrl' => 'https://shop.test/cb?x=1'], 'callbackUrl'],
-    'timeout above 120' => [['timeoutMinutes' => 121], 'timeoutMinutes'],
+    'time to live below a minute' => [['timeToLiveSeconds' => 59], 'timeToLiveSeconds'],
+    'time to live above 120 minutes' => [['timeToLiveSeconds' => 7260], 'timeToLiveSeconds'],
+    'time to live not in whole minutes' => [['timeToLiveSeconds' => 90], 'timeToLiveSeconds'],
 ]);
 
 it('builds config from an array and names a missing key', function () {

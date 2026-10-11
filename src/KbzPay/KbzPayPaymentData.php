@@ -23,7 +23,7 @@ final class KbzPayPaymentData
      * @param  Amount|int  $amount  Amount in kyat, e.g. `Amount::kyat(1000)` or `Amount::parse('1000.50')`. Up to 2 decimal places.
      * @param  string  $callbackUrl  Public URL KBZ posts the payment result to (`notify_url`). No query string.
      * @param  string|null  $title  Product name shown to the customer.
-     * @param  int|null  $timeoutMinutes  Minutes before the order expires, 1 to 120. KBZ defaults to 120.
+     * @param  int|null  $timeToLiveSeconds  Seconds the customer has to pay before the order expires, 60 to 7200 in whole minutes (a multiple of 60). KBZ defaults to 7200 (120 minutes).
      * @param  string|null  $callbackInfo  Free text KBZ sends back unchanged in the callback.
      */
     public function __construct(
@@ -31,7 +31,7 @@ final class KbzPayPaymentData
         Amount|int $amount,
         public readonly string $callbackUrl,
         public readonly ?string $title = null,
-        public readonly ?int $timeoutMinutes = null,
+        public readonly ?int $timeToLiveSeconds = null,
         public readonly ?string $callbackInfo = null,
     ) {
         $this->amount = Amount::from($amount);
@@ -55,7 +55,8 @@ final class KbzPayPaymentData
             ->url('callbackUrl', $this->callbackUrl)
             ->max('callbackUrl', $this->callbackUrl, 512)
             ->when(str_contains($this->callbackUrl, '?'), 'callbackUrl', 'The callbackUrl field must not contain a query string.')
-            ->between('timeoutMinutes', $this->timeoutMinutes, 1, 120)
+            ->between('timeToLiveSeconds', $this->timeToLiveSeconds, 60, 7200)
+            ->when($this->timeToLiveSeconds !== null && $this->timeToLiveSeconds % 60 !== 0, 'timeToLiveSeconds', 'The timeToLiveSeconds field must be a multiple of 60.')
             ->max('callbackInfo', $this->callbackInfo === null ? null : urlencode($this->callbackInfo), 512)
             ->validate();
     }
