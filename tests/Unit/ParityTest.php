@@ -279,3 +279,18 @@ it('applies per-payment Wave Money overrides like every other SDK', function () 
             ->toThrow(fn (InvalidPaymentDataException $e) => expect(array_keys($e->errors()))->toBe([$fields[$case['setting']]]));
     }
 });
+
+it('takes KBZ Pay\'s time to live from the payment, then the configuration, like every other SDK', function () {
+    $vector = parity()['kbz_pay_time_to_live'];
+    $env = parity()['config']['env'];
+
+    foreach ($vector['cases'] as $case) {
+        $http = mockHttp(jsonResponse(['Response' => ['result' => 'SUCCESS', 'code' => '0', 'msg' => 'success', 'prepay_id' => 'PREPAY123', 'qrCode' => 'qr']]));
+        $config = KbzPayConfig::fromEnv($case['config'] === null ? $env : [$vector['variable'] => $case['config']] + $env);
+
+        $payment = (new KbzPay($config, $http))->qr(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveSeconds: $case['payment']));
+
+        expect(requestJson($http->getLastRequest())['Request']['biz_content']['timeout_express'] ?? null)->toBe($case['timeout_express'], (string) json_encode($case))
+            ->and($payment->expiresAt === null)->toBe($case['timeout_express'] === null);
+    }
+});

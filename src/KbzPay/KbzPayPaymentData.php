@@ -23,7 +23,7 @@ final class KbzPayPaymentData
      * @param  Amount|int  $amount  Amount in kyat, e.g. `Amount::kyat(1000)` or `Amount::parse('1000.50')`. Up to 2 decimal places.
      * @param  string  $callbackUrl  Public URL KBZ posts the payment result to (`notify_url`). No query string.
      * @param  string|null  $title  Product name shown to the customer.
-     * @param  int|null  $timeToLiveSeconds  Seconds the customer has to pay before the order expires, 60 to 7200 in whole minutes (a multiple of 60). KBZ defaults to 7200 (120 minutes).
+     * @param  int|null  $timeToLiveSeconds  Seconds the customer has to pay before the order expires, 60 to 7200 in whole minutes (a multiple of 60). Overrides `KbzPayConfig::$timeToLiveSeconds`; when both are unset KBZ allows 7200 (120 minutes).
      * @param  string|null  $callbackInfo  Free text KBZ sends back unchanged in the callback.
      */
     public function __construct(

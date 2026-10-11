@@ -65,6 +65,30 @@ final class Config
     }
 
     /**
+     * A whole number given as an integer or integer text, or null when it is missing or blank.
+     *
+     * @throws ConfigurationException When the value is set but not a whole number, naming `$requirement`.
+     */
+    public function optionalInteger(string $key, string $requirement): ?int
+    {
+        $value = $this->config[$key] ?? null;
+
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return null;
+        }
+
+        if (is_string($value) && preg_match('/^[+-]?[0-9]+\z/', trim($value)) === 1) {
+            $value = (int) trim($value);
+        }
+
+        if (! is_int($value)) {
+            throw ConfigurationException::invalid($this->gateway, $key, $requirement);
+        }
+
+        return $value;
+    }
+
+    /**
      * A credential the constructor was given: blank after trimming means missing.
      */
     public static function requireValue(string $gateway, string $key, string $value): string

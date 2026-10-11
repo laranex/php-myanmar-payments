@@ -107,7 +107,7 @@ class KbzPay implements PaymentGateway
         return new QrPayment(
             orderId: $data->orderId,
             qrString: $qrCode,
-            expiresAt: $data->timeToLiveSeconds === null ? null : new DateTimeImmutable("+{$data->timeToLiveSeconds} seconds"),
+            expiresAt: $order['time_to_live_seconds'] === null ? null : new DateTimeImmutable("+{$order['time_to_live_seconds']} seconds"),
             reference: $order['prepay_id'],
             raw: $order['response'],
         );
@@ -187,10 +187,11 @@ class KbzPay implements PaymentGateway
     }
 
     /**
-     * @return array{prepay_id: string, nonce_str: string, timestamp: string, response: array<string, mixed>}
+     * @return array{prepay_id: string, nonce_str: string, timestamp: string, time_to_live_seconds: int|null, response: array<string, mixed>}
      */
     private function precreate(KbzPayPaymentData $data, string $tradeType): array
     {
+        $timeToLiveSeconds = $data->timeToLiveSeconds ?? $this->config->timeToLiveSeconds;
         $biz = array_filter([
             'appid' => $this->config->appId,
             'merch_code' => $this->config->merchantCode,
@@ -199,7 +200,7 @@ class KbzPay implements PaymentGateway
             'total_amount' => $data->amount->toString(),
             'trans_currency' => 'MMK',
             'title' => $data->title,
-            'timeout_express' => $data->timeToLiveSeconds === null ? null : intdiv($data->timeToLiveSeconds, 60).'m',
+            'timeout_express' => $timeToLiveSeconds === null ? null : intdiv($timeToLiveSeconds, 60).'m',
             'callback_info' => $data->callbackInfo === null ? null : urlencode($data->callbackInfo),
         ], fn (?string $value): bool => $value !== null && $value !== '');
 
@@ -213,7 +214,7 @@ class KbzPay implements PaymentGateway
             throw new ApiException('KBZ Pay did not return a prepay_id.', raw: $response);
         }
 
-        return ['prepay_id' => $response['prepay_id'], 'nonce_str' => $nonce, 'timestamp' => $timestamp, 'response' => $response];
+        return ['prepay_id' => $response['prepay_id'], 'nonce_str' => $nonce, 'timestamp' => $timestamp, 'time_to_live_seconds' => $timeToLiveSeconds, 'response' => $response];
     }
 
     /**
