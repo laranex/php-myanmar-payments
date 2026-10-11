@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\YomaMmqr;
 
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
+use Laranex\PhpMyanmarPayments\MyanmarPayments;
 use Laranex\PhpMyanmarPayments\Support\Config;
 use Laranex\PhpMyanmarPayments\Support\Env;
 
@@ -28,7 +29,7 @@ final class YomaMmqrConfig
      * @param  string  $clientSecret  OAuth client secret.
      * @param  string  $webhookHashKey  The hash key Yoma issued for verifying callbacks.
      * @param  string  $apiVersion  The `{version}` segment of the API paths, e.g. `v1rc`.
-     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up. A client you pass keeps its own timeout.
+     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up, 30 by default. A client you pass keeps its own timeout.
      * @param  string|null  $webhookSecret  The secret you shared with Yoma; when set, callbacks must carry it in `X-Webhook-Secret`.
      * @param  string|null  $baseUrl  Override the API base URL; production when unset.
      *
@@ -40,7 +41,7 @@ final class YomaMmqrConfig
         public readonly string $clientSecret,
         public readonly string $webhookHashKey,
         public readonly string $apiVersion,
-        public readonly int $timeoutSeconds,
+        public readonly int $timeoutSeconds = MyanmarPayments::DEFAULT_TIMEOUT_SECONDS,
         ?string $webhookSecret = null,
         ?string $baseUrl = null,
     ) {
@@ -70,7 +71,7 @@ final class YomaMmqrConfig
             clientSecret: $config->required('client_secret'),
             webhookHashKey: $config->required('webhook_hashkey'),
             apiVersion: $config->required('api_version'),
-            timeoutSeconds: $config->seconds('timeout_in_seconds'),
+            timeoutSeconds: $config->seconds('timeout_in_seconds', MyanmarPayments::DEFAULT_TIMEOUT_SECONDS),
             webhookSecret: $config->string('webhook_secret'),
             baseUrl: $config->string('base_url'),
         );

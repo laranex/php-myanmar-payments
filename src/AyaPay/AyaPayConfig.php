@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\AyaPay;
 
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
+use Laranex\PhpMyanmarPayments\MyanmarPayments;
 use Laranex\PhpMyanmarPayments\Support\Config;
 use Laranex\PhpMyanmarPayments\Support\Env;
 
@@ -21,7 +22,7 @@ final class AyaPayConfig
     /**
      * @param  string  $appKey  The public application key, sent with every request.
      * @param  string  $appSecret  The secret used to sign requests and verify callbacks.
-     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up. A client you pass keeps its own timeout.
+     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up, 30 by default. A client you pass keeps its own timeout.
      * @param  string|null  $baseUrl  Override the gateway base URL; production when unset.
      *
      * @throws ConfigurationException When a setting is blank or the timeout is not greater than 0.
@@ -29,7 +30,7 @@ final class AyaPayConfig
     public function __construct(
         public readonly string $appKey,
         public readonly string $appSecret,
-        public readonly int $timeoutSeconds,
+        public readonly int $timeoutSeconds = MyanmarPayments::DEFAULT_TIMEOUT_SECONDS,
         ?string $baseUrl = null,
     ) {
         Config::requireValue('aya_pay', 'app_key', $appKey);
@@ -51,7 +52,7 @@ final class AyaPayConfig
         return new self(
             appKey: $config->required('app_key'),
             appSecret: $config->required('app_secret'),
-            timeoutSeconds: $config->seconds('timeout_in_seconds'),
+            timeoutSeconds: $config->seconds('timeout_in_seconds', MyanmarPayments::DEFAULT_TIMEOUT_SECONDS),
             baseUrl: $config->string('base_url'),
         );
     }

@@ -7,9 +7,12 @@ use Laranex\PhpMyanmarPayments\AyaPay\AyaPayConfig;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSource;
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPay;
+use Laranex\PhpMyanmarPayments\KbzPay\KbzPayConfig;
 use Laranex\PhpMyanmarPayments\MyanmarPayments;
 use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoney;
+use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyConfig;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqr;
+use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrConfig;
 
 it('builds each configured gateway once', function () {
     $payments = new MyanmarPayments([
@@ -57,9 +60,22 @@ it('requires every setting except the URL overrides', function (array $config, s
 })->with([
     [['app_secret' => 's', 'timeout_in_seconds' => 30], 'app_key'],
     [['app_key' => 'k', 'timeout_in_seconds' => 30], 'app_secret'],
-    [['app_key' => 'k', 'app_secret' => 's'], 'timeout_in_seconds'],
-    [['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => ' '], 'timeout_in_seconds'],
 ]);
+
+it('defaults the HTTP timeout to 30 seconds when it is missing or blank', function (array $config) {
+    expect(AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's'] + $config)->timeoutSeconds)->toBe(30)
+        ->and(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)->toBe(30);
+})->with([[[]], [['timeout_in_seconds' => null]], [['timeout_in_seconds' => ' ']]]);
+
+it('defaults the HTTP timeout when the constructor is not given one', function () {
+    expect((new KbzPayConfig('a', 'b', 'c'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 300))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and((new AyaPayConfig('k', 's'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and((new YomaMmqrConfig('M', 'c', 's', 'h', 'v1rc'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and(KbzPayConfig::fromArray(['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c'])->timeoutSeconds)->toBe(30)
+        ->and(WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => 300])->timeoutSeconds)->toBe(30)
+        ->and(YomaMmqrConfig::fromArray(['merchant_id' => 'M', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h', 'api_version' => 'v1rc'])->timeoutSeconds)->toBe(30);
+});
 
 it('reads whole numbers of seconds from integers and integer text', function (mixed $value, int $seconds) {
     expect(AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => $value])->timeoutSeconds)->toBe($seconds);

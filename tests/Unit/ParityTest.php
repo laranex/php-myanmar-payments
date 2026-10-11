@@ -153,6 +153,24 @@ it('defaults to the production URLs and takes the UAT URLs as overrides like eve
         ->toBe(array_fill(0, 4, $seconds['timeout_in_seconds']));
 });
 
+it('defaults the HTTP timeout to 30 seconds like every other SDK', function () {
+    $vector = parity()['config'];
+    $default = $vector['default_timeout'];
+
+    foreach ($default['values'] as $value) {
+        $env = $vector['env'];
+
+        if ($value === null) {
+            unset($env[$default['variable']]);
+        } else {
+            $env[$default['variable']] = $value;
+        }
+
+        expect([KbzPayConfig::fromEnv($env)->timeoutSeconds, WaveMoneyConfig::fromEnv($env)->timeoutSeconds, AyaPayConfig::fromEnv($env)->timeoutSeconds, YomaMmqrConfig::fromEnv($env)->timeoutSeconds])
+            ->toBe(array_fill(0, 4, $default['timeout_in_seconds']), (string) json_encode($value));
+    }
+});
+
 it('requires every setting like every other SDK', function () {
     $vector = parity()['config'];
 

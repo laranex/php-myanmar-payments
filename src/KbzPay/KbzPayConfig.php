@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\KbzPay;
 
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
+use Laranex\PhpMyanmarPayments\MyanmarPayments;
 use Laranex\PhpMyanmarPayments\Support\Config;
 use Laranex\PhpMyanmarPayments\Support\Env;
 
@@ -26,7 +27,7 @@ final class KbzPayConfig
      * @param  string  $appId  The `appid` KBZ issued for your merchant app.
      * @param  string  $appKey  The secret key used to sign requests.
      * @param  string  $merchantCode  The `merch_code` KBZ issued.
-     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up. A client you pass keeps its own timeout.
+     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up, 30 by default. A client you pass keeps its own timeout.
      * @param  string|null  $apiUrl  Override the API base URL; production when unset.
      * @param  string|null  $pwaUrl  Override the PWA checkout URL, e.g. `https://static.kbzpay.com/pgw/uat/pwa/#/`; production when unset.
      *
@@ -36,7 +37,7 @@ final class KbzPayConfig
         public readonly string $appId,
         public readonly string $appKey,
         public readonly string $merchantCode,
-        public readonly int $timeoutSeconds,
+        public readonly int $timeoutSeconds = MyanmarPayments::DEFAULT_TIMEOUT_SECONDS,
         ?string $apiUrl = null,
         ?string $pwaUrl = null,
     ) {
@@ -62,7 +63,7 @@ final class KbzPayConfig
             appId: $config->required('app_id'),
             appKey: $config->required('app_key'),
             merchantCode: $config->required('merchant_code'),
-            timeoutSeconds: $config->seconds('timeout_in_seconds'),
+            timeoutSeconds: $config->seconds('timeout_in_seconds', MyanmarPayments::DEFAULT_TIMEOUT_SECONDS),
             apiUrl: $config->string('api_url'),
             pwaUrl: $config->string('pwa_url'),
         );

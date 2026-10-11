@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\WaveMoney;
 
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
+use Laranex\PhpMyanmarPayments\MyanmarPayments;
 use Laranex\PhpMyanmarPayments\Support\Config;
 use Laranex\PhpMyanmarPayments\Support\Env;
 
@@ -27,7 +28,7 @@ final class WaveMoneyConfig
      * @param  string  $secretKey  The hash secret key Wave issued.
      * @param  string  $merchantName  Your business name, shown on Wave's payment page.
      * @param  int  $timeToLiveSeconds  How long the customer has to pay, greater than 0.
-     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up. A client you pass keeps its own timeout.
+     * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up, 30 by default. A client you pass keeps its own timeout.
      * @param  string|null  $baseUrl  Override the API base URL; production when unset.
      * @param  string|null  $authenticateUrl  Override the host the customer is redirected to; production when unset. Wave serves it without the API port.
      *
@@ -38,7 +39,7 @@ final class WaveMoneyConfig
         public readonly string $secretKey,
         public readonly string $merchantName,
         public readonly int $timeToLiveSeconds,
-        public readonly int $timeoutSeconds,
+        public readonly int $timeoutSeconds = MyanmarPayments::DEFAULT_TIMEOUT_SECONDS,
         ?string $baseUrl = null,
         ?string $authenticateUrl = null,
     ) {
@@ -66,7 +67,7 @@ final class WaveMoneyConfig
             secretKey: $config->required('secret_key'),
             merchantName: $config->required('merchant_name'),
             timeToLiveSeconds: $config->seconds('time_to_live_in_seconds'),
-            timeoutSeconds: $config->seconds('timeout_in_seconds'),
+            timeoutSeconds: $config->seconds('timeout_in_seconds', MyanmarPayments::DEFAULT_TIMEOUT_SECONDS),
             baseUrl: $config->string('base_url'),
             authenticateUrl: $config->string('authenticate_url'),
         );

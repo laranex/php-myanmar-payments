@@ -23,6 +23,11 @@ use Psr\SimpleCache\CacheInterface;
  */
 class MyanmarPayments
 {
+    /**
+     * Seconds before the default HTTP client gives up when no timeout is configured.
+     */
+    public const DEFAULT_TIMEOUT_SECONDS = 30;
+
     private ?KbzPay $kbzPay = null;
 
     private ?WaveMoney $waveMoney = null;

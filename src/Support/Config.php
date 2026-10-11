@@ -40,16 +40,17 @@ final class Config
     }
 
     /**
-     * A whole number greater than 0, given as an integer or integer text such as `"300"`.
+     * A whole number greater than 0, given as an integer or integer text such as `"300"`. A missing or blank value
+     * is the default when one is given.
      *
-     * @throws ConfigurationException When the value is missing, blank or not a whole number greater than 0.
+     * @throws ConfigurationException When the value is missing or blank without a default, or not a whole number greater than 0.
      */
-    public function seconds(string $key): int
+    public function seconds(string $key, ?int $default = null): int
     {
         $value = $this->config[$key] ?? null;
 
         if ($value === null || (is_string($value) && trim($value) === '')) {
-            throw ConfigurationException::missing($this->gateway, $key);
+            return $default ?? throw ConfigurationException::missing($this->gateway, $key);
         }
 
         if (is_string($value) && preg_match('/^[+-]?[0-9]+\z/', trim($value)) === 1) {

@@ -23,7 +23,7 @@ Requires PHP 8.1+ and any PSR-18 HTTP client (Guzzle is one); the client is auto
 
 ## Configure
 
-`MyanmarPayments::fromEnv()` reads `KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*` (or `AYA_PGW_*`), `YOMA_MMQR_*`, `CYBER_SOURCE_*` and `MYANMAR_PAYMENTS_HTTP_TIMEOUT` (the same variables as the Go, Node and Python SDKs). Every gateway uses its production URLs unless you set the URL overrides (`*_BASE_URL`, `KBZ_PAY_PWA_BASE_REDIRECT_URL`, `WAVE_MONEY_AUTHENTICATE_URL`) to the gateway's UAT URLs. Every other setting is required and has no default: the HTTP timeout in seconds (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, for every gateway except CyberSource), `WAVE_MONEY_MERCHANT_NAME`, `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS` and `YOMA_MMQR_API_VERSION` (e.g. `v1rc`).
+`MyanmarPayments::fromEnv()` reads `KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*` (or `AYA_PGW_*`), `YOMA_MMQR_*`, `CYBER_SOURCE_*` and `MYANMAR_PAYMENTS_HTTP_TIMEOUT` (the same variables as the Go, Node and Python SDKs). Every gateway uses its production URLs unless you set the URL overrides (`*_BASE_URL`, `KBZ_PAY_PWA_BASE_REDIRECT_URL`, `WAVE_MONEY_AUTHENTICATE_URL`) to the gateway's UAT URLs. The HTTP timeout in seconds (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, for every gateway except CyberSource) is optional and defaults to 30 (`MyanmarPayments::DEFAULT_TIMEOUT_SECONDS`). Every other setting is required and has no default: `WAVE_MONEY_MERCHANT_NAME`, `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS` and `YOMA_MMQR_API_VERSION` (e.g. `v1rc`).
 
 ```php
 use Laranex\PhpMyanmarPayments\MyanmarPayments;
@@ -32,9 +32,9 @@ $payments = MyanmarPayments::fromEnv(); // create once, share across requests
 $kbzPay = $payments->kbzPay(); // also waveMoney(), ayaPay(), yomaMmqr(), cyberSource()
 ```
 
-- Or build one gateway: `new KbzPay(new KbzPayConfig(appId: '...', appKey: '...', merchantCode: '...', timeoutSeconds: 30))`, `KbzPay::fromEnv()` or `new KbzPay(KbzPayConfig::fromEnv())`.
-- Or pass the settings directly: gateways and `new MyanmarPayments([...])` take config objects or snake_case arrays (`['kbz_pay' => ['app_id' => '...', 'app_key' => '...', 'merchant_code' => '...', 'timeout_in_seconds' => 30]]`).
-- Options: a PSR-18 client (second argument of `KbzPay`, `WaveMoney`, `AyaPay`, `YomaMmqr` and `MyanmarPayments`; without one, Guzzle gets the configured `timeoutSeconds`; a client you pass keeps its own timeout). Yoma and the facade also take a PSR-16 cache for the access token (default: in-memory `ArrayCache`; pass a shared cache when you run several processes).
+- Or build one gateway: `new KbzPay(new KbzPayConfig(appId: '...', appKey: '...', merchantCode: '...'))`, `KbzPay::fromEnv()` or `new KbzPay(KbzPayConfig::fromEnv())`.
+- Or pass the settings directly: gateways and `new MyanmarPayments([...])` take config objects or snake_case arrays (`['kbz_pay' => ['app_id' => '...', 'app_key' => '...', 'merchant_code' => '...']]`; add `timeoutSeconds` / `timeout_in_seconds` to change the 30-second timeout).
+- Options: a PSR-18 client (second argument of `KbzPay`, `WaveMoney`, `AyaPay`, `YomaMmqr` and `MyanmarPayments`; without one, Guzzle gets the configured `timeoutSeconds`, 30 by default; a client you pass keeps its own timeout). Yoma and the facade also take a PSR-16 cache for the access token (default: in-memory `ArrayCache`; pass a shared cache when you run several processes).
 - A missing setting throws `ConfigurationException` (`gateway`, `key`); so does a time setting that is not a whole number greater than 0.
 
 ## Use
