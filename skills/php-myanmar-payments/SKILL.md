@@ -59,7 +59,7 @@ $payment = $kbzPay->pwa(new KbzPayPaymentData(
 header('Location: '.$payment->url);
 ```
 
-- `RedirectPayment` (`url`) from `$kbzPay->pwa($data)` and `$waveMoney->initiate($data)`. Wave fills `$data->merchantReferenceId` when empty; store it.
+- `RedirectPayment` (`url`) from `$kbzPay->pwa($data)` and `$waveMoney->initiate($data)`. Wave fills `$data->merchantReferenceId` when empty; store it. Pass `merchantName` or `timeToLiveSeconds` to `WaveMoneyPaymentData` to override the configured `WAVE_MONEY_MERCHANT_NAME` or `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS` for that one payment (the settings stay required).
 - `FormPayment` from `$ayaPay->initiate($data)` and `$cyberSource->initiate($data)` (no network call): `echo $payment->toHtml()` for an auto-submitting page, or render `action`, `fields` and `enctype` yourself.
 - `QrPayment` from `$kbzPay->qr($data)` (encode `qrString`) and `$yomaMmqr->initiate($data)` (`qrImageDataUri()`, `expiresAt`, `reference`). A Yoma QR lives `YomaMmqr::QR_LIFETIME_SECONDS` (120); renew it with `$yomaMmqr->renewQr($orderId)`.
 - `AppPayment` from `$kbzPay->app($data)`: return `$payment->toArray()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.

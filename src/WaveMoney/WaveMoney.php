@@ -70,8 +70,10 @@ class WaveMoney implements PaymentGateway
      */
     public function initiate(WaveMoneyPaymentData $data): RedirectPayment
     {
+        $timeToLiveSeconds = $data->timeToLiveSeconds ?? $this->config->timeToLiveSeconds;
+
         $response = $this->transport->postForm("{$this->config->baseUrl}/payment", [
-            'time_to_live_in_seconds' => (string) $this->config->timeToLiveSeconds,
+            'time_to_live_in_seconds' => (string) $timeToLiveSeconds,
             'merchant_id' => $this->config->merchantId,
             'order_id' => $data->orderId,
             'merchant_reference_id' => $data->merchantReferenceId,
@@ -79,10 +81,10 @@ class WaveMoney implements PaymentGateway
             'backend_result_url' => $data->callbackUrl,
             'amount' => $data->amount->toString(),
             'payment_description' => $data->description,
-            'merchant_name' => $this->config->merchantName,
+            'merchant_name' => $data->merchantName ?? $this->config->merchantName,
             'items' => json_encode(array_map(fn (WaveMoneyItem $item): array => $item->toArray(), $data->items), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             'hash' => $this->signer->requestHash(
-                $this->config->timeToLiveSeconds,
+                $timeToLiveSeconds,
                 $this->config->merchantId,
                 $data->orderId,
                 $data->amount->toString(),

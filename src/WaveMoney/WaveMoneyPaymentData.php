@@ -32,6 +32,8 @@ final class WaveMoneyPaymentData
      * @param  list<WaveMoneyItem>  $items  Line items shown on Wave's page.
      * @param  Amount|int|null  $amount  Total in whole kyat, e.g. `Amount::kyat(1000)`. Defaults to the sum of the items. Wave does not accept decimals.
      * @param  string|null  $merchantReferenceId  Unique id of this attempt. Defaults to a random id when null or empty.
+     * @param  string|null  $merchantName  Business name shown on Wave's page for this payment. Defaults to the configured `merchant_name`.
+     * @param  int|null  $timeToLiveSeconds  How long the customer has to pay this payment, greater than 0. Defaults to the configured `time_to_live_in_seconds`.
      */
     public function __construct(
         public readonly string $orderId,
@@ -41,6 +43,8 @@ final class WaveMoneyPaymentData
         public readonly array $items,
         Amount|int|null $amount = null,
         ?string $merchantReferenceId = null,
+        public readonly ?string $merchantName = null,
+        public readonly ?int $timeToLiveSeconds = null,
     ) {
         $this->amount = $amount === null ? self::sumOf($items) : Amount::from($amount);
         $this->merchantReferenceId = $merchantReferenceId === null || $merchantReferenceId === '' ? bin2hex(random_bytes(16)) : $merchantReferenceId;
@@ -76,6 +80,8 @@ final class WaveMoneyPaymentData
         $validator
             ->amount('Wave Money', $this->amount, maxDecimals: 0)
             ->required('merchantReferenceId', $this->merchantReferenceId)
+            ->when($this->merchantName !== null && trim($this->merchantName) === '', 'merchantName', 'The merchantName field is required.')
+            ->when($this->timeToLiveSeconds !== null && $this->timeToLiveSeconds < 1, 'timeToLiveSeconds', 'The timeToLiveSeconds field must be greater than 0.')
             ->validate();
     }
 

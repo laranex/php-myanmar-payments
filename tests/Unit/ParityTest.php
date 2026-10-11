@@ -245,3 +245,36 @@ it('uses the same messages as every other SDK', function () {
         ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', Amount::parse('1.505'), 'https://shop.test/cb'))['amount'])->toBe($messages['kbz_decimals'])
         ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeoutMinutes: 0))['timeoutMinutes'])->toBe($messages['kbz_timeout_zero']);
 });
+
+it('applies per-payment Wave Money overrides like every other SDK', function () {
+    $vector = parity()['wave_money_request_overrides'];
+    $config = $vector['config'];
+    $data = $vector['data'];
+
+    $build = fn (?string $merchantName, ?int $timeToLiveSeconds): WaveMoneyPaymentData => new WaveMoneyPaymentData(
+        orderId: $data['order_id'],
+        callbackUrl: $data['callback_url'],
+        returnUrl: $data['return_url'],
+        description: $data['description'],
+        items: array_map(fn (array $item): WaveMoneyItem => new WaveMoneyItem($item[0], $item[1]), $data['items']),
+        merchantReferenceId: $data['merchant_reference_id'],
+        merchantName: $merchantName,
+        timeToLiveSeconds: $timeToLiveSeconds,
+    );
+
+    foreach ($vector['cases'] as $case) {
+        $http = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => 'T1']));
+        $gateway = new WaveMoney(new WaveMoneyConfig($config['merchant_id'], $config['secret_key'], $config['merchant_name'], $config['time_to_live_in_seconds']), $http);
+
+        $gateway->initiate($build($case['merchant_name'], $case['time_to_live_in_seconds']));
+
+        expect(requestForm($http->getLastRequest()))->toMatchArray($case['expected']);
+    }
+
+    foreach ($vector['invalid'] as $case) {
+        $fields = ['merchant_name' => 'merchantName', 'time_to_live_in_seconds' => 'timeToLiveSeconds'];
+
+        expect(fn () => $build($case['merchant_name'], $case['time_to_live_in_seconds']))
+            ->toThrow(fn (InvalidPaymentDataException $e) => expect(array_keys($e->errors()))->toBe([$fields[$case['setting']]]));
+    }
+});
