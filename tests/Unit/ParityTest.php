@@ -243,8 +243,7 @@ it('uses the same messages as every other SDK', function () {
     expect($errors(fn () => new WaveMoneyPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 10)], Amount::parse('10.5')))['amount'])->toBe($messages['whole_amounts_only'])
         ->and($errors(fn () => new AyaPayPaymentData('ORDER123', Amount::parse('10.5'), 'aya_pay', AyaPayMethod::Qr))['amount'])->toBe($messages['aya_whole_amounts_only'])
         ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', Amount::parse('1.505'), 'https://shop.test/cb'))['amount'])->toBe($messages['kbz_decimals'])
-        ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveSeconds: 0))['timeToLiveSeconds'])->toBe($messages['kbz_time_to_live_range'])
-        ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveSeconds: 90))['timeToLiveSeconds'])->toBe($messages['kbz_time_to_live_minutes']);
+        ->and($errors(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveMinutes: 0))['timeToLiveMinutes'])->toBe($messages['kbz_time_to_live_range']);
 });
 
 it('applies per-payment Wave Money overrides like every other SDK', function () {
@@ -286,11 +285,40 @@ it('takes KBZ Pay\'s time to live from the payment, then the configuration, like
 
     foreach ($vector['cases'] as $case) {
         $http = mockHttp(jsonResponse(['Response' => ['result' => 'SUCCESS', 'code' => '0', 'msg' => 'success', 'prepay_id' => 'PREPAY123', 'qrCode' => 'qr']]));
-        $config = KbzPayConfig::fromEnv($case['config'] === null ? $env : [$vector['variable'] => $case['config']] + $env);
+        $settings = $env;
+        unset($settings[$vector['variable']]);
+        $config = KbzPayConfig::fromEnv($case['config'] === null ? $settings : [$vector['variable'] => $case['config']] + $settings);
 
-        $payment = (new KbzPay($config, $http))->qr(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveSeconds: $case['payment']));
+        $payment = (new KbzPay($config, $http))->qr(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveMinutes: $case['payment']));
 
         expect(requestJson($http->getLastRequest())['Request']['biz_content']['timeout_express'] ?? null)->toBe($case['timeout_express'], (string) json_encode($case))
-            ->and($payment->expiresAt === null)->toBe($case['timeout_express'] === null);
+            ->and($payment->expiresAt)->not->toBeNull();
+    }
+
+    foreach ($vector['missing']['configs'] as $value) {
+        $settings = $env;
+        unset($settings[$vector['variable']]);
+        $http = mockHttp();
+        $gateway = new KbzPay(KbzPayConfig::fromEnv($value === null ? $settings : [$vector['variable'] => $value] + $settings), $http);
+
+        expect(fn () => $gateway->qr(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb')))
+            ->toThrow(fn (InvalidPaymentDataException $e) => expect($e->errors())->toBe([$vector['missing']['field'] => $vector['missing']['message']]))
+            ->and($http->getRequests())->toBe([]);
+    }
+});
+
+it('requires a Wave Money time to live from the payment or the configuration like every other SDK', function () {
+    $vector = parity()['wave_money_time_to_live_missing'];
+    $env = parity()['config']['env'];
+
+    foreach ($vector['configs'] as $value) {
+        $settings = $env;
+        unset($settings[$vector['variable']]);
+        $http = mockHttp();
+        $gateway = new WaveMoney(WaveMoneyConfig::fromEnv($value === null ? $settings : [$vector['variable'] => $value] + $settings), $http);
+
+        expect(fn () => $gateway->initiate(new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'Order 100', [new WaveMoneyItem('Shoes', 1000)])))
+            ->toThrow(fn (InvalidPaymentDataException $e) => expect($e->errors())->toBe([$vector['field'] => $vector['message']]))
+            ->and($http->getRequests())->toBe([]);
     }
 });

@@ -9,6 +9,7 @@ use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
+use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\Acknowledgement;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
@@ -76,6 +77,7 @@ class KbzPay implements PaymentGateway
      * the URL registered with KBZ.
      *
      * @throws ApiException
+     * @throws InvalidPaymentDataException When neither the payment nor the configuration sets a time to live.
      */
     public function pwa(KbzPayPaymentData $data): RedirectPayment
     {
@@ -94,6 +96,7 @@ class KbzPay implements PaymentGateway
      * Create an order and get a QR payload for the customer to scan with the KBZ Pay app.
      *
      * @throws ApiException
+     * @throws InvalidPaymentDataException When neither the payment nor the configuration sets a time to live.
      */
     public function qr(KbzPayPaymentData $data): QrPayment
     {
@@ -107,7 +110,7 @@ class KbzPay implements PaymentGateway
         return new QrPayment(
             orderId: $data->orderId,
             qrString: $qrCode,
-            expiresAt: $order['time_to_live_seconds'] === null ? null : new DateTimeImmutable("+{$order['time_to_live_seconds']} seconds"),
+            expiresAt: new DateTimeImmutable("+{$order['time_to_live_minutes']} minutes"),
             reference: $order['prepay_id'],
             raw: $order['response'],
         );
@@ -119,6 +122,7 @@ class KbzPay implements PaymentGateway
      * The SDK's own result only means the payment screen closed. Rely on the callback or `status()`.
      *
      * @throws ApiException
+     * @throws InvalidPaymentDataException When neither the payment nor the configuration sets a time to live.
      */
     public function app(KbzPayPaymentData $data): AppPayment
     {
@@ -187,11 +191,12 @@ class KbzPay implements PaymentGateway
     }
 
     /**
-     * @return array{prepay_id: string, nonce_str: string, timestamp: string, time_to_live_seconds: int|null, response: array<string, mixed>}
+     * @return array{prepay_id: string, nonce_str: string, timestamp: string, time_to_live_minutes: int, response: array<string, mixed>}
      */
     private function precreate(KbzPayPaymentData $data, string $tradeType): array
     {
-        $timeToLiveSeconds = $data->timeToLiveSeconds ?? $this->config->timeToLiveSeconds;
+        $timeToLiveMinutes = $data->timeToLiveMinutes ?? $this->config->timeToLiveMinutes
+            ?? throw new InvalidPaymentDataException(['timeToLiveMinutes' => 'The timeToLiveMinutes field is required when the kbz_pay configuration has no [time_to_live_in_minutes].']);
         $biz = array_filter([
             'appid' => $this->config->appId,
             'merch_code' => $this->config->merchantCode,
@@ -200,7 +205,7 @@ class KbzPay implements PaymentGateway
             'total_amount' => $data->amount->toString(),
             'trans_currency' => 'MMK',
             'title' => $data->title,
-            'timeout_express' => $timeToLiveSeconds === null ? null : intdiv($timeToLiveSeconds, 60).'m',
+            'timeout_express' => $timeToLiveMinutes.'m',
             'callback_info' => $data->callbackInfo === null ? null : urlencode($data->callbackInfo),
         ], fn (?string $value): bool => $value !== null && $value !== '');
 
@@ -214,7 +219,7 @@ class KbzPay implements PaymentGateway
             throw new ApiException('KBZ Pay did not return a prepay_id.', raw: $response);
         }
 
-        return ['prepay_id' => $response['prepay_id'], 'nonce_str' => $nonce, 'timestamp' => $timestamp, 'time_to_live_seconds' => $timeToLiveSeconds, 'response' => $response];
+        return ['prepay_id' => $response['prepay_id'], 'nonce_str' => $nonce, 'timestamp' => $timestamp, 'time_to_live_minutes' => $timeToLiveMinutes, 'response' => $response];
     }
 
     /**

@@ -147,11 +147,10 @@ it('rejects a time to live that is not greater than 0', function () {
         ->and(fn () => WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => '-5', 'timeout_in_seconds' => 30]))->toThrow(ConfigurationException::class, $message);
 });
 
-it('requires the time to live and keeps the configured one', function () {
-    expect((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 600, timeoutSeconds: 30))->timeToLiveSeconds)->toBe(600);
-
-    WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'timeout_in_seconds' => 30]);
-})->throws(ConfigurationException::class, 'The wave_money configuration is missing [time_to_live_in_seconds].');
+it('keeps the configured time to live, which is optional', function () {
+    expect((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 600, timeoutSeconds: 30))->timeToLiveSeconds)->toBe(600)
+        ->and(WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => ' '])->timeToLiveSeconds)->toBeNull();
+});
 
 it('generates a merchant reference id when an empty one is given', function () {
     $data = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WaveMoneyItem('A', 1000)], merchantReferenceId: '');

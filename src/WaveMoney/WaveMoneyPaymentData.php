@@ -33,7 +33,7 @@ final class WaveMoneyPaymentData
      * @param  Amount|int|null  $amount  Total in whole kyat, e.g. `Amount::kyat(1000)`. Defaults to the sum of the items. Wave does not accept decimals.
      * @param  string|null  $merchantReferenceId  Unique id of this attempt. Defaults to a random id when null or empty.
      * @param  string|null  $merchantName  Business name shown on Wave's page for this payment. Defaults to the configured `merchant_name`.
-     * @param  int|null  $timeToLiveSeconds  How long the customer has to pay this payment, greater than 0. Defaults to the configured `time_to_live_in_seconds`.
+     * @param  int|null  $timeToLiveSeconds  How long the customer has to pay this payment, greater than 0. Defaults to the configured `time_to_live_in_seconds`; one of the two is required.
      */
     public function __construct(
         public readonly string $orderId,

@@ -20,9 +20,9 @@ final class KbzPayConfig
     public const PRODUCTION_PWA_URL = 'https://wap.kbzpay.com/pgw/pwa/#/';
 
     /**
-     * What a valid `time_to_live_in_seconds` is: KBZ counts whole minutes, up to 120.
+     * What a valid `time_to_live_in_minutes` is: KBZ counts whole minutes, up to 120.
      */
-    public const TIME_TO_LIVE_REQUIREMENT = 'a multiple of 60 from 60 to 7200';
+    public const TIME_TO_LIVE_REQUIREMENT = 'a whole number from 1 to 120';
 
     public readonly string $apiUrl;
 
@@ -35,7 +35,7 @@ final class KbzPayConfig
      * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up, 30 by default. A client you pass keeps its own timeout.
      * @param  string|null  $apiUrl  Override the API base URL; production when unset.
      * @param  string|null  $pwaUrl  Override the PWA checkout URL, e.g. `https://static.kbzpay.com/pgw/uat/pwa/#/`; production when unset.
-     * @param  int|null  $timeToLiveSeconds  Seconds the customer has to pay each order, 60 to 7200 in whole minutes. A payment's own `timeToLiveSeconds` overrides it; unset leaves it to KBZ (7200).
+     * @param  int|null  $timeToLiveMinutes  Minutes the customer has to pay each order, 1 to 120. A payment's own `timeToLiveMinutes` overrides it. With neither set, a payment throws `InvalidPaymentDataException`.
      *
      * @throws ConfigurationException When a setting is blank, the timeout is not greater than 0 or the time to live is out of range.
      */
@@ -46,15 +46,15 @@ final class KbzPayConfig
         public readonly int $timeoutSeconds = MyanmarPayments::DEFAULT_TIMEOUT_SECONDS,
         ?string $apiUrl = null,
         ?string $pwaUrl = null,
-        public readonly ?int $timeToLiveSeconds = null,
+        public readonly ?int $timeToLiveMinutes = null,
     ) {
         Config::requireValue('kbz_pay', 'app_id', $appId);
         Config::requireValue('kbz_pay', 'app_key', $appKey);
         Config::requireValue('kbz_pay', 'merchant_code', $merchantCode);
         Config::requirePositive('kbz_pay', 'timeout_in_seconds', $timeoutSeconds);
 
-        if ($timeToLiveSeconds !== null && ($timeToLiveSeconds < 60 || $timeToLiveSeconds > 7200 || $timeToLiveSeconds % 60 !== 0)) {
-            throw ConfigurationException::invalid('kbz_pay', 'time_to_live_in_seconds', self::TIME_TO_LIVE_REQUIREMENT);
+        if ($timeToLiveMinutes !== null && ($timeToLiveMinutes < 1 || $timeToLiveMinutes > 120)) {
+            throw ConfigurationException::invalid('kbz_pay', 'time_to_live_in_minutes', self::TIME_TO_LIVE_REQUIREMENT);
         }
 
         $this->apiUrl = rtrim(Config::optionalValue($apiUrl) ?? self::PRODUCTION_API_URL, '/');
@@ -62,7 +62,7 @@ final class KbzPayConfig
     }
 
     /**
-     * @param  array{app_id?: string|null, app_key?: string|null, merchant_code?: string|null, timeout_in_seconds?: int|string|null, api_url?: string|null, pwa_url?: string|null, time_to_live_in_seconds?: int|string|null}  $config
+     * @param  array{app_id?: string|null, app_key?: string|null, merchant_code?: string|null, timeout_in_seconds?: int|string|null, api_url?: string|null, pwa_url?: string|null, time_to_live_in_minutes?: int|string|null}  $config
      *
      * @throws ConfigurationException When a setting is missing or invalid.
      */
@@ -77,13 +77,13 @@ final class KbzPayConfig
             timeoutSeconds: $config->seconds('timeout_in_seconds', MyanmarPayments::DEFAULT_TIMEOUT_SECONDS),
             apiUrl: $config->string('api_url'),
             pwaUrl: $config->string('pwa_url'),
-            timeToLiveSeconds: $config->optionalInteger('time_to_live_in_seconds', self::TIME_TO_LIVE_REQUIREMENT),
+            timeToLiveMinutes: $config->optionalInteger('time_to_live_in_minutes', self::TIME_TO_LIVE_REQUIREMENT),
         );
     }
 
     /**
      * Read `KBZ_PAY_APP_ID`, `KBZ_PAY_APP_KEY`, `KBZ_PAY_MERCHANT_CODE`, `MYANMAR_PAYMENTS_HTTP_TIMEOUT`,
-     * `KBZ_PAY_BASE_URL`, `KBZ_PAY_PWA_BASE_REDIRECT_URL` and `KBZ_PAY_TIME_TO_LIVE_IN_SECONDS`.
+     * `KBZ_PAY_BASE_URL`, `KBZ_PAY_PWA_BASE_REDIRECT_URL` and `KBZ_PAY_TIME_TO_LIVE_IN_MINUTES`.
      *
      * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
      *
@@ -100,7 +100,7 @@ final class KbzPayConfig
             'timeout_in_seconds' => $env->first('MYANMAR_PAYMENTS_HTTP_TIMEOUT'),
             'api_url' => $env->first('KBZ_PAY_BASE_URL'),
             'pwa_url' => $env->first('KBZ_PAY_PWA_BASE_REDIRECT_URL'),
-            'time_to_live_in_seconds' => $env->first('KBZ_PAY_TIME_TO_LIVE_IN_SECONDS'),
+            'time_to_live_in_minutes' => $env->first('KBZ_PAY_TIME_TO_LIVE_IN_MINUTES'),
         ]);
     }
 }

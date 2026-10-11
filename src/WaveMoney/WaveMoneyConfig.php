@@ -27,7 +27,7 @@ final class WaveMoneyConfig
      * @param  string  $merchantId  The merchant id Wave issued.
      * @param  string  $secretKey  The hash secret key Wave issued.
      * @param  string  $merchantName  Your business name, shown on Wave's payment page.
-     * @param  int  $timeToLiveSeconds  How long the customer has to pay, greater than 0.
+     * @param  int|null  $timeToLiveSeconds  How long the customer has to pay, greater than 0. A payment's own `timeToLiveSeconds` overrides it. With neither set, a payment throws `InvalidPaymentDataException`.
      * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up, 30 by default. A client you pass keeps its own timeout.
      * @param  string|null  $baseUrl  Override the API base URL; production when unset.
      * @param  string|null  $authenticateUrl  Override the host the customer is redirected to; production when unset. Wave serves it without the API port.
@@ -38,7 +38,7 @@ final class WaveMoneyConfig
         public readonly string $merchantId,
         public readonly string $secretKey,
         public readonly string $merchantName,
-        public readonly int $timeToLiveSeconds,
+        public readonly ?int $timeToLiveSeconds = null,
         public readonly int $timeoutSeconds = MyanmarPayments::DEFAULT_TIMEOUT_SECONDS,
         ?string $baseUrl = null,
         ?string $authenticateUrl = null,
@@ -46,7 +46,10 @@ final class WaveMoneyConfig
         Config::requireValue('wave_money', 'merchant_id', $merchantId);
         Config::requireValue('wave_money', 'secret_key', $secretKey);
         Config::requireValue('wave_money', 'merchant_name', $merchantName);
-        Config::requirePositive('wave_money', 'time_to_live_in_seconds', $timeToLiveSeconds);
+
+        if ($timeToLiveSeconds !== null) {
+            Config::requirePositive('wave_money', 'time_to_live_in_seconds', $timeToLiveSeconds);
+        }
         Config::requirePositive('wave_money', 'timeout_in_seconds', $timeoutSeconds);
 
         $this->baseUrl = rtrim(Config::optionalValue($baseUrl) ?? self::PRODUCTION_URL, '/');
@@ -66,7 +69,7 @@ final class WaveMoneyConfig
             merchantId: $config->required('merchant_id'),
             secretKey: $config->required('secret_key'),
             merchantName: $config->required('merchant_name'),
-            timeToLiveSeconds: $config->seconds('time_to_live_in_seconds'),
+            timeToLiveSeconds: $config->optionalInteger('time_to_live_in_seconds', ConfigurationException::POSITIVE_WHOLE_NUMBER),
             timeoutSeconds: $config->seconds('timeout_in_seconds', MyanmarPayments::DEFAULT_TIMEOUT_SECONDS),
             baseUrl: $config->string('base_url'),
             authenticateUrl: $config->string('authenticate_url'),

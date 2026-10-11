@@ -8,6 +8,7 @@ use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
+use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 use Laranex\PhpMyanmarPayments\Http\Transport;
@@ -67,10 +68,12 @@ class WaveMoney implements PaymentGateway
      * Create a payment request and get Wave's page to redirect the customer to.
      *
      * @throws ApiException
+     * @throws InvalidPaymentDataException When neither the payment nor the configuration sets a time to live.
      */
     public function initiate(WaveMoneyPaymentData $data): RedirectPayment
     {
-        $timeToLiveSeconds = $data->timeToLiveSeconds ?? $this->config->timeToLiveSeconds;
+        $timeToLiveSeconds = $data->timeToLiveSeconds ?? $this->config->timeToLiveSeconds
+            ?? throw new InvalidPaymentDataException(['timeToLiveSeconds' => 'The timeToLiveSeconds field is required when the wave_money configuration has no [time_to_live_in_seconds].']);
 
         $response = $this->transport->postForm("{$this->config->baseUrl}/payment", [
             'time_to_live_in_seconds' => (string) $timeToLiveSeconds,
