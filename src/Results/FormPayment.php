@@ -57,8 +57,10 @@ final class FormPayment implements PaymentResult
     /**
      * A complete HTML page that posts the form as soon as it loads. `&`, `<`, `>`, `"` and `'` are escaped
      * (`&amp;`, `&lt;`, `&gt;`, `&#34;`, `&#39;`), byte for byte like the Go, Node and Python SDKs.
+     *
+     * @param  string|null  $nonce  Your Content-Security-Policy nonce, added (escaped) to the inline `<script>`.
      */
-    public function toHtml(): string
+    public function toHtml(?string $nonce = null): string
     {
         $escape = fn (string $value): string => strtr($value, ['&' => '&amp;', '<' => '&lt;', '>' => '&gt;', '"' => '&#34;', "'" => '&#39;']);
 
@@ -73,7 +75,7 @@ final class FormPayment implements PaymentResult
             .$inputs
             .'<noscript><button type="submit">Continue to payment</button></noscript>'
             .'</form>'
-            .'<script>document.getElementById("payment-form").submit();</script>'
+            .'<script'.($nonce !== null && $nonce !== '' ? ' nonce="'.$escape($nonce).'"' : '').'>document.getElementById("payment-form").submit();</script>'
             .'</body></html>';
     }
 }

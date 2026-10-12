@@ -71,3 +71,12 @@ it('reports success only for the successful status', function () {
         ->and($pending->isSuccessful())->toBeFalse()
         ->and(new PaymentStatusResult('O1', PaymentStatus::Successful, 'PAY_SUCCESS'))->isSuccessful()->toBeTrue();
 });
+
+it('adds an escaped CSP nonce to the auto-submit script', function () {
+    $payment = new FormPayment('O1', 'https://pay.test', ['a' => 'b']);
+
+    expect($payment->toHtml('r4nd0m'))->toContain('<script nonce="r4nd0m">document.getElementById("payment-form").submit();</script>')
+        ->and($payment->toHtml('"><x'))->toContain('<script nonce="&#34;&gt;&lt;x">')
+        ->and($payment->toHtml(''))->toBe($payment->toHtml())
+        ->and($payment->toHtml())->toContain('<script>document');
+});
