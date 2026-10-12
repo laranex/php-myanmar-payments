@@ -91,13 +91,16 @@ class CyberSource implements PaymentGateway
      *
      * `decision` and `req_reference_number` must be signed, and only fields listed in `signed_field_names` are
      * read, so unsigned extra fields (e.g. a re-posted checkout form with `decision=ACCEPT` added) can't change the result.
+     * The signed string is `name=value` pairs joined with ",", so `signed_field_names` must list itself, with no empty,
+     * repeated or "=" holding names, and `decision` must be one CyberSource documents; a signed value holding
+     * ",decision=ACCEPT" can't be re-split into a different field list.
      *
      * @throws SignatureVerificationException
      */
     public function handleCallback(CallbackRequest $request): PaymentCallback
     {
         $payload = $request->input();
-        $expected = $this->sign($payload);
+        $expected = $this->strictFieldNames($payload) ? $this->sign($payload) : null;
 
         if ($expected === null || ! is_string($payload['signature'] ?? null) || ! hash_equals($expected, $payload['signature'])) {
             throw new SignatureVerificationException('CyberSource callback signature verification failed.', $payload);
@@ -109,6 +112,10 @@ class CyberSource implements PaymentGateway
             throw new SignatureVerificationException('CyberSource callback does not sign decision and req_reference_number.', $payload);
         }
         $decision = strtoupper(trim((string) ($signed['decision'] ?? '')));
+
+        if (! array_key_exists($decision, self::STATUSES)) {
+            throw new SignatureVerificationException('CyberSource callback has an unknown decision.', $payload);
+        }
 
         return new PaymentCallback(
             orderId: (string) ($signed['req_reference_number'] ?? ''),
@@ -160,6 +167,26 @@ class CyberSource implements PaymentGateway
         }
 
         return null;
+    }
+
+    /**
+     * `signed_field_names` lists itself, once, and every name is unique, non-empty and free of "=".
+     *
+     * @param  array<array-key, mixed>  $fields
+     */
+    private function strictFieldNames(array $fields): bool
+    {
+        $names = $fields['signed_field_names'] ?? null;
+
+        if (! is_string($names)) {
+            return false;
+        }
+
+        $list = explode(',', $names);
+
+        return in_array('signed_field_names', $list, true)
+            && count(array_unique($list)) === count($list)
+            && array_filter($list, fn (string $name): bool => $name === '' || str_contains($name, '=')) === [];
     }
 
     /**

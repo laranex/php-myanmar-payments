@@ -185,3 +185,57 @@ it('requires both decision and req_reference_number to be signed', function (str
     'decision unsigned' => ['req_reference_number,signed_field_names'],
     'reference unsigned' => ['decision,signed_field_names'],
 ])->throws(SignatureVerificationException::class);
+
+it('rejects a genuine post re-partitioned around a signed customer field holding ",decision=ACCEPT"', function () {
+    // CyberSource signs a declined payment that echoes the customer's first name, typed as "x,decision=ACCEPT,req_bill_to_email=a".
+    $genuine = [
+        'transaction_id' => '1',
+        'decision' => 'DECLINE',
+        'req_reference_number' => 'ORDER-1',
+        'req_bill_to_forename' => 'x,decision=ACCEPT,req_bill_to_email=a',
+        'signed_field_names' => 'transaction_id,decision,req_reference_number,req_bill_to_forename,signed_field_names,signed_date_time',
+        'signed_date_time' => '2026-10-13T00:00:00Z',
+    ];
+    $signature = cyberSourceSignature($genuine);
+
+    expect($this->gateway->handleCallback(new CallbackRequest(http_build_query($genuine + ['signature' => $signature])))->status)->toBe(PaymentStatus::Failed);
+
+    // The same signed string, split along a field list that leaves signed_field_names out.
+    $forged = [
+        'transaction_id' => '1,decision=DECLINE',
+        'req_reference_number' => 'ORDER-1',
+        'req_bill_to_forename' => 'x',
+        'decision' => 'ACCEPT',
+        'req_bill_to_email' => 'a,signed_field_names='.$genuine['signed_field_names'],
+        'signed_date_time' => '2026-10-13T00:00:00Z',
+        'signed_field_names' => 'transaction_id,req_reference_number,req_bill_to_forename,decision,req_bill_to_email,signed_date_time',
+        'signature' => $signature,
+    ];
+
+    expect(fn () => $this->gateway->handleCallback(new CallbackRequest(http_build_query($forged))))
+        ->toThrow(SignatureVerificationException::class, 'CyberSource callback signature verification failed.');
+});
+
+it('rejects a signed_field_names list that is not strictly formed', function (string $names) {
+    $fields = ['decision' => 'ACCEPT', 'req_reference_number' => 'ORDER-1', 'signed_field_names' => $names, 'a=b' => 'c'];
+    $fields['signature'] = base64_encode(hash_hmac('sha256', implode(',', array_map(
+        fn (string $name): string => $name.'='.($fields[$name] ?? ''),
+        array_values(array_filter(explode(',', $names), fn (string $name): bool => $name !== '')),
+    )), 'secret', true));
+
+    $this->gateway->handleCallback(new CallbackRequest(http_build_query($fields)));
+})->with([
+    'not listing itself' => ['decision,req_reference_number'],
+    'a repeated name' => ['decision,req_reference_number,decision,signed_field_names'],
+    'an empty name' => ['decision,,req_reference_number,signed_field_names'],
+    'a trailing comma' => ['decision,req_reference_number,signed_field_names,'],
+    'a name holding "="' => ['decision,req_reference_number,a=b,signed_field_names'],
+])->throws(SignatureVerificationException::class, 'signature verification failed');
+
+it('rejects a decision CyberSource does not document', function () {
+    $this->gateway->handleCallback(cyberSourceCallback(['decision' => 'APPROVED']));
+})->throws(SignatureVerificationException::class, 'unknown decision');
+
+it('reads a lowercase decision as before', function () {
+    expect($this->gateway->handleCallback(cyberSourceCallback(['decision' => 'accept']))->status)->toBe(PaymentStatus::Successful);
+});
