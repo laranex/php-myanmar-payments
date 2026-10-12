@@ -168,3 +168,25 @@ it('hashes boolean and numeric callback values as their JSON text', function () 
 
     expect($callback->amount)->toBe('1000.00')->and($callback->isSuccessful())->toBeTrue();
 });
+
+it('rejects a correctly hashed callback whose values are malformed', function (array $override) {
+    $payload = array_replace(['status' => 'PAYMENT_CONFIRMED', 'orderId' => '100', 'amount' => '1000', 'merchantReferenceId' => 'ref-001', 'transactionId' => '360'], $override);
+
+    (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback($payload));
+})->with([
+    'missing amount' => [['amount' => null]],
+    'negative amount' => [['amount' => '-1000']],
+    'amount with a trailing dot' => [['amount' => '1000.']],
+    'amount with text' => [['amount' => '1000https']],
+    'order id with a space' => [['orderId' => '100 1']],
+    'order id with a separator-like value' => [['orderId' => '100:1000']],
+    'reference id with a slash' => [['merchantReferenceId' => 'ref/001']],
+])->throws(SignatureVerificationException::class, 'Wave Money callback is malformed.');
+
+it('accepts a decimal amount and order ids with "_" and "-"', function () {
+    $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback([
+        'status' => 'PAYMENT_CONFIRMED', 'orderId' => 'ORDER_1-a', 'amount' => '1000.00', 'merchantReferenceId' => 'Ref_1-b',
+    ]));
+
+    expect($callback->orderId)->toBe('ORDER_1-a')->and($callback->amount)->toBe('1000.00');
+});

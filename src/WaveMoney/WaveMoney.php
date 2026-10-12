@@ -123,6 +123,8 @@ class WaveMoney implements PaymentGateway
      * Verify Wave's callback. Only `PAYMENT_CONFIRMED` means the customer paid.
      *
      * `orderId` falls back to `merchantReferenceId` when it is missing, null or empty, because Wave marks `orderId` as optional.
+     * Wave's hash joins the values with no separator, so after the hash matches the amount must be a non-negative
+     * decimal and `orderId` / `merchantReferenceId` (when sent) may only hold letters, digits, `_` and `-`.
      *
      * @throws SignatureVerificationException
      */
@@ -132,6 +134,10 @@ class WaveMoney implements PaymentGateway
 
         if (! $this->signer->verifyCallback($payload)) {
             throw new SignatureVerificationException('Wave Money callback hash verification failed.', $payload);
+        }
+
+        if (! self::wellFormed($payload)) {
+            throw new SignatureVerificationException('Wave Money callback is malformed.', $payload);
         }
 
         $gatewayStatus = trim((string) ($payload['status'] ?? ''));
@@ -144,6 +150,22 @@ class WaveMoney implements PaymentGateway
             amount: isset($payload['amount']) ? (string) $payload['amount'] : null,
             raw: $payload,
         );
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $payload
+     */
+    private static function wellFormed(array $payload): bool
+    {
+        foreach (['orderId', 'merchantReferenceId'] as $field) {
+            $value = Json::scalarString($payload[$field] ?? null);
+
+            if ($value !== '' && preg_match('/^[A-Za-z0-9_-]+\z/', $value) !== 1) {
+                return false;
+            }
+        }
+
+        return preg_match('/^\d+(\.\d+)?\z/', Json::scalarString($payload['amount'] ?? null)) === 1;
     }
 
     /**
