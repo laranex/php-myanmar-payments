@@ -181,6 +181,7 @@ it('rejects a correctly hashed callback whose values are malformed', function (a
     'order id with a space' => [['orderId' => '100 1']],
     'order id with a separator-like value' => [['orderId' => '100:1000']],
     'reference id with a slash' => [['merchantReferenceId' => 'ref/001']],
+    'neither order id nor reference id' => [['orderId' => null, 'merchantReferenceId' => '']],
 ])->throws(SignatureVerificationException::class, 'Wave Money callback is malformed.');
 
 it('accepts a decimal amount and order ids with "_" and "-"', function () {

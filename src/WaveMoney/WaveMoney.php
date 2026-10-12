@@ -124,7 +124,8 @@ class WaveMoney implements PaymentGateway
      *
      * `orderId` falls back to `merchantReferenceId` when it is missing, null or empty, because Wave marks `orderId` as optional.
      * Wave's hash joins the values with no separator, so after the hash matches the amount must be a non-negative
-     * decimal and `orderId` / `merchantReferenceId` (when sent) may only hold letters, digits, `_` and `-`.
+     * decimal, at least one of `orderId` / `merchantReferenceId` must be present, and each (when sent) may only hold
+     * letters, digits, `_` and `-`.
      *
      * @throws SignatureVerificationException
      */
@@ -157,15 +158,19 @@ class WaveMoney implements PaymentGateway
      */
     private static function wellFormed(array $payload): bool
     {
+        $hasId = false;
+
         foreach (['orderId', 'merchantReferenceId'] as $field) {
             $value = Json::scalarString($payload[$field] ?? null);
 
             if ($value !== '' && preg_match('/^[A-Za-z0-9_-]+\z/', $value) !== 1) {
                 return false;
             }
+
+            $hasId = $hasId || $value !== '';
         }
 
-        return preg_match('/^\d+(\.\d+)?\z/', Json::scalarString($payload['amount'] ?? null)) === 1;
+        return $hasId && preg_match('/^\d+(\.\d+)?\z/', Json::scalarString($payload['amount'] ?? null)) === 1;
     }
 
     /**
