@@ -25,13 +25,13 @@ final class WaveMoneyPaymentData
     public readonly string $merchantReferenceId;
 
     /**
-     * @param  string  $orderId  Your order id. One order can have several payment attempts.
+     * @param  string  $orderId  Your order id: letters, numbers, `_` and `-`. One order can have several payment attempts.
      * @param  string  $callbackUrl  URL that Wave posts the result to (`backend_result_url`).
      * @param  string  $returnUrl  URL Wave sends the customer back to (`frontend_result_url`). Not proof of payment.
      * @param  string  $description  Payment description shown to the customer.
      * @param  list<WaveMoneyItem>  $items  Line items shown on Wave's page.
      * @param  Amount|int|null  $amount  Total in whole kyat, e.g. `Amount::kyat(1000)`. Defaults to the sum of the items. Wave does not accept decimals.
-     * @param  string|null  $merchantReferenceId  Unique id of this attempt. Defaults to a random id when null or empty.
+     * @param  string|null  $merchantReferenceId  Unique id of this attempt: letters, numbers, `_` and `-`. Defaults to a random id when null or empty.
      * @param  string|null  $merchantName  Business name shown on Wave's page for this payment. Defaults to the configured `merchant_name`.
      * @param  int|null  $timeToLiveSeconds  How long the customer has to pay this payment, greater than 0. Defaults to the configured `time_to_live_in_seconds`; one of the two is required.
      */
@@ -61,6 +61,7 @@ final class WaveMoneyPaymentData
     {
         $validator = (new Validator)
             ->required('orderId', $this->orderId)
+            ->pattern('orderId', $this->orderId, '/^[A-Za-z0-9_-]+\z/', 'letters, numbers, underscores and dashes')
             ->required('callbackUrl', $this->callbackUrl)
             ->url('callbackUrl', $this->callbackUrl)
             ->required('returnUrl', $this->returnUrl)
@@ -80,6 +81,7 @@ final class WaveMoneyPaymentData
         $validator
             ->amount('Wave Money', $this->amount, maxDecimals: 0)
             ->required('merchantReferenceId', $this->merchantReferenceId)
+            ->pattern('merchantReferenceId', $this->merchantReferenceId, '/^[A-Za-z0-9_-]+\z/', 'letters, numbers, underscores and dashes')
             ->when($this->merchantName !== null && trim($this->merchantName) === '', 'merchantName', 'The merchantName field is required.')
             ->when($this->timeToLiveSeconds !== null && $this->timeToLiveSeconds < 1, 'timeToLiveSeconds', 'The timeToLiveSeconds field must be greater than 0.')
             ->validate();

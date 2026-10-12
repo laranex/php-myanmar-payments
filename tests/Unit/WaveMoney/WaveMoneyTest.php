@@ -190,3 +190,12 @@ it('accepts a decimal amount and order ids with "_" and "-"', function () {
 
     expect($callback->orderId)->toBe('ORDER_1-a')->and($callback->amount)->toBe('1000.00');
 });
+
+it('only creates payments whose ids its own callback check accepts', function (string $orderId, ?string $reference, string $field) {
+    expect(fn () => new WaveMoneyPaymentData($orderId, 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WaveMoneyItem('A', 1000)], merchantReferenceId: $reference))
+        ->toThrow(fn (InvalidPaymentDataException $e) => expect($e->errors())->toBe([$field => "The {$field} field may only contain letters, numbers, underscores and dashes."]));
+})->with([
+    ['Order 1', 'ref-001', 'orderId'],
+    ['100:1', 'ref-001', 'orderId'],
+    ['100', 'ref/001', 'merchantReferenceId'],
+]);
