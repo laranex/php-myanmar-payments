@@ -34,7 +34,8 @@ $kbzPay = $payments->kbzPay(); // also waveMoney(), ayaPay(), yomaMmqr(), cyberS
 
 - Or build one gateway: `new KbzPay(new KbzPayConfig(appId: '...', appKey: '...', merchantCode: '...'))`, `KbzPay::fromEnv()` or `new KbzPay(KbzPayConfig::fromEnv())`.
 - Or pass the settings directly: gateways and `new MyanmarPayments([...])` take config objects or snake_case arrays (`['kbz_pay' => ['app_id' => '...', 'app_key' => '...', 'merchant_code' => '...']]`; add `timeoutSeconds` / `timeout_in_seconds` to change the 30-second timeout).
-- Options: a PSR-18 client (second argument of `KbzPay`, `WaveMoney`, `AyaPay`, `YomaMmqr` and `MyanmarPayments`; without one, Guzzle gets the configured `timeoutSeconds`, 30 by default; a client you pass keeps its own timeout). Yoma and the facade also take a PSR-16 cache for the access token (default: in-memory `ArrayCache`; pass a shared cache when you run several processes).
+- Options: a PSR-18 client (second argument of `KbzPay`, `WaveMoney`, `AyaPay`, `YomaMmqr` and `MyanmarPayments`; without one, Guzzle gets the configured `timeoutSeconds`, 30 by default; a client you pass keeps its own timeout). Yoma and the facade also take a PSR-16 cache for the access token.
+- Yoma MMQR needs a shared PSR-16 cache in production (`new YomaMmqr($config, $client, $cache)` or `MyanmarPayments::fromEnv(cache: $cache)`). The default in-memory `ArrayCache` dies with the PHP process, so a PHP-FPM app without one fetches a new access token on every request.
 - A missing setting throws `ConfigurationException` (`gateway`, `key`); so does a time setting that is not a whole number greater than 0.
 
 ## Use
@@ -88,6 +89,7 @@ $callback->acknowledgement->send(); // or copy its status, headers and body to y
 
 - Give the package the raw body: `fromGlobals()` reads `php://input` and `fromPsr7()` the PSR-7 body; disable CSRF protection for callback routes.
 - Check AYA's browser return with `$ayaPay->verifyRedirect($request)`.
+- Yoma MMQR callbacks sign only `orderNumber` and `status` and carry no amount (`$callback->amount` is null): confirm with `$yomaMmqr->status($reference)` before fulfilling.
 - For production, store the verified callback, acknowledge immediately, then process it once in the background.
 
 ### Check status and handle errors

@@ -24,7 +24,14 @@ use Psr\SimpleCache\CacheInterface;
 /**
  * Yoma Bank MMQR: QR payments, status checks and callbacks.
  *
- * Access tokens last 8 hours and are cached; pass a shared PSR-16 cache so they survive between requests.
+ * Pass a shared PSR-16 cache (Redis, APCu, files, your framework's cache). Access tokens last 8 hours, but
+ * without a cache the gateway keeps them in an in-memory `ArrayCache` that dies with the PHP process, so a
+ * PHP-FPM or CGI app fetches a new token on every request: slower, and it may hit Yoma's token rate limits.
+ * Long-running workers keep the token for their own lifetime; several workers or servers should still share one
+ * cache. The cache key is shared with the other Laranex SDKs (see `TOKEN_CACHE_PREFIX`).
+ *
+ * Callbacks sign only `orderNumber` and `status`, not the amount: confirm the amount with `status()` (or your own
+ * order record) before fulfilling.
  */
 class YomaMmqr implements PaymentGateway
 {
@@ -54,6 +61,8 @@ class YomaMmqr implements PaymentGateway
 
     /**
      * @param  YomaMmqrConfig|array<string, mixed>  $config  A config object or a `YomaMmqrConfig::fromArray()` array.
+     * @param  CacheInterface|null  $cache  Where the access token is kept. Pass a shared cache in production; the
+     *                                      in-memory default only lasts for the current PHP process.
      *
      * @throws ConfigurationException When a credential is missing.
      */
@@ -162,6 +171,9 @@ class YomaMmqr implements PaymentGateway
 
     /**
      * Verify Yoma's payment callback.
+     *
+     * Only `orderNumber` and `status` are signed and the callback carries no amount, so `amount` is null. Confirm the
+     * payment with `status()` before fulfilling.
      *
      * @throws SignatureVerificationException
      */
