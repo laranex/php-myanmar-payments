@@ -30,8 +30,9 @@ use Psr\SimpleCache\CacheInterface;
  * Long-running workers keep the token for their own lifetime; several workers or servers should still share one
  * cache. The cache key is shared with the other Laranex SDKs (see `TOKEN_CACHE_PREFIX`).
  *
- * Callbacks sign only `orderNumber` and `status`, not the amount: confirm the amount with `status()` (or your own
- * order record) before fulfilling.
+ * Callbacks sign only `orderNumber` and `status`: match `orderNumber` to your stored order, whose QR was generated
+ * for the stored amount, and optionally confirm with `status()` and that order's QR reference (`refLabel`). Neither
+ * the callback nor the status result carries an amount, so trust your stored amount.
  */
 class YomaMmqr implements PaymentGateway
 {
@@ -172,8 +173,9 @@ class YomaMmqr implements PaymentGateway
     /**
      * Verify Yoma's payment callback.
      *
-     * Only `orderNumber` and `status` are signed and the callback carries no amount, so `amount` is null. Confirm the
-     * payment with `status()` before fulfilling.
+     * Only `orderNumber` and `status` are signed and the callback carries no amount, so `amount` is null. Match
+     * `orderNumber` to your stored order (its QR was generated for the stored amount) and, to confirm, call `status()`
+     * with that order's QR reference (`refLabel`). The status result has no amount either: trust your stored amount.
      *
      * @throws SignatureVerificationException
      */
