@@ -17,7 +17,7 @@ final class AyaPaySigner
      * Field order of the decoded callback / enquiry payload. The payload spells `currenyCode` this way.
      * AYA leaves out fields that do not apply (e.g. card fields for wallet payments) and signs only the ones present.
      */
-    private const PAYLOAD_FIELDS = [
+    public const PAYLOAD_FIELDS = [
         'merchOrderId', 'tranId', 'amount', 'currencyCode', 'statusCode',
         'paymentCardNumber', 'paymentMobileNumber', 'cardTypeName', 'cardExpiryDate', 'nameOnCard',
         'approvalCode', 'tranRef', 'userRef1', 'userRef2', 'userRef3', 'userRef4', 'userRef5',

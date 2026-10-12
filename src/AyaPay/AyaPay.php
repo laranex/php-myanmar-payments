@@ -224,7 +224,37 @@ class AyaPay implements PaymentGateway
             throw new SignatureVerificationException("AYA Pay {$context} checksum verification failed.", $input);
         }
 
+        if (! self::wellFormed($payload)) {
+            throw new SignatureVerificationException("AYA Pay {$context} payload is malformed.", $input);
+        }
+
         return $payload;
+    }
+
+    /**
+     * AYA joins the signed values with ":", so a value holding ":" could be re-split into other fields under the
+     * same checksum. Only `dateTime` may hold ":" (in the `Y-m-d H:i:s` form AYA sends), and the fields a result is
+     * read from must be present and strictly formatted.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private static function wellFormed(array $payload): bool
+    {
+        foreach (AyaPaySigner::PAYLOAD_FIELDS as $field) {
+            $value = Json::scalarString($payload[$field] ?? null);
+
+            if ($field === 'dateTime' ? $value !== '' && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\z/', $value) !== 1 : str_contains($value, ':')) {
+                return false;
+            }
+        }
+
+        $currency = Json::scalarString($payload[array_key_exists('currenyCode', $payload) ? 'currenyCode' : 'currencyCode'] ?? null);
+        $required = array_map(fn (string $field): string => Json::scalarString($payload[$field] ?? null), ['merchOrderId', 'tranId']);
+
+        return ! in_array('', $required, true)
+            && preg_match('/^\d+(\.\d+)?\z/', Json::scalarString($payload['amount'] ?? null)) === 1
+            && $currency === self::CURRENCY_MMK
+            && preg_match('/^\d{2}\z/', Json::scalarString($payload['statusCode'] ?? null)) === 1;
     }
 
     /**

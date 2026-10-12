@@ -19,6 +19,8 @@ final class AyaPayPaymentData
     public readonly Amount $amount;
 
     /**
+     * AYA joins the signed values with ":", so `orderId`, `description` and `userRefs` must not contain ":".
+     *
      * @param  string  $orderId  Your unique order id (`merchOrderId`), 6 to 40 characters.
      * @param  Amount|int  $amount  Amount in whole kyat, e.g. `Amount::kyat(1000)`. AYA does not accept decimals.
      * @param  string  $channel  The channel key from `AyaPay::services()`, e.g. `aya_pay`, `kbz_pay`, `visa`.
@@ -56,6 +58,9 @@ final class AyaPayPaymentData
             ->url('returnUrl', $this->returnUrl)
             ->when(count($this->userRefs) > 5, 'userRefs', 'The userRefs field must not have more than 5 items.')
             ->when(! array_is_list($this->userRefs) || array_filter($this->userRefs, fn (mixed $ref): bool => ! is_string($ref)) !== [], 'userRefs', 'The userRefs field must be a list of strings.')
+            ->when(str_contains($this->orderId, ':'), 'orderId', 'The orderId field must not contain ":".')
+            ->when(str_contains((string) $this->description, ':'), 'description', 'The description field must not contain ":".')
+            ->when(array_filter($this->userRefs, fn (mixed $ref): bool => is_string($ref) && str_contains($ref, ':')) !== [], 'userRefs', 'The userRefs field must not contain ":".')
             ->validate();
     }
 }

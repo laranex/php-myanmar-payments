@@ -163,8 +163,8 @@ it('reports the HTTP status when AYA answers without a status code', function ()
 })->throws(ApiException::class, 'AYA Pay services failed with HTTP 502.');
 
 it('reads a return payload whose "+" arrived as a space', function () {
-    $payload = ['merchOrderId' => 'ORD123456', 'amount' => '1000', 'statusCode' => '00', 'description' => '~~~>>>'];
-    $signed = ayaSigned($payload, 'ORD123456:1000:00:~~~>>>');
+    $payload = ['merchOrderId' => 'ORD123456', 'tranId' => 'T1', 'amount' => '1000', 'currenyCode' => '104', 'statusCode' => '00', 'description' => '~~~>>>'];
+    $signed = ayaSigned($payload, 'ORD123456:T1:1000:104:00:~~~>>>');
     expect($signed['payload'])->toContain('+');
 
     $query = ['payload' => str_replace('+', ' ', $signed['payload']), 'checkSum' => $signed['checkSum']];
@@ -173,10 +173,71 @@ it('reads a return payload whose "+" arrived as a space', function () {
 });
 
 it('verifies a payload whose amount is a JSON number against its exact text', function () {
-    $json = '{"merchOrderId":"ORD123456","amount":1000.00,"statusCode":"00","approved":true}';
-    $input = ['payload' => base64_encode($json), 'checkSum' => hash_hmac('sha256', 'ORD123456:1000.00:00', 'test-secret')];
+    $json = '{"merchOrderId":"ORD123456","tranId":"T1","amount":1000.00,"currenyCode":104,"statusCode":"00","approved":true}';
+    $input = ['payload' => base64_encode($json), 'checkSum' => hash_hmac('sha256', 'ORD123456:T1:1000.00:104:00', 'test-secret')];
 
     $callback = (new AyaPay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($input));
 
     expect($callback->amount)->toBe('1000.00')->and($callback->isSuccessful())->toBeTrue();
 });
+
+it('rejects a genuine failed payload re-split to read as successful', function () {
+    // AYA signs a failed payment (statusCode 02) whose dateTime ends in ":00".
+    $genuine = ['merchOrderId' => 'ORD123456', 'tranId' => 'TRN0001', 'amount' => '1000', 'currenyCode' => '104', 'statusCode' => '02', 'description' => 'Order', 'dateTime' => '2026-10-07 10:00:00'];
+    $checksumString = 'ORD123456:TRN0001:1000:104:02:Order:2026-10-07 10:00:00';
+    $gateway = new AyaPay($this->config, mockHttp());
+
+    expect($gateway->handleCallback(CallbackRequest::fromArray(ayaSigned($genuine, $checksumString)))->status)->toBe(PaymentStatus::Failed);
+
+    // The attacker re-splits the same signed string so that statusCode reads the "00" seconds of the time.
+    $forged = ['merchOrderId' => 'ORD123456', 'tranId' => 'TRN0001', 'amount' => '1000', 'currenyCode' => '104:02:Order:2026-10-07 10', 'statusCode' => '00', 'description' => '00'];
+
+    expect(fn () => $gateway->handleCallback(CallbackRequest::fromArray(ayaSigned($forged, $checksumString))))
+        ->toThrow(SignatureVerificationException::class, 'AYA Pay callback payload is malformed.');
+});
+
+it('rejects a callback without a field the result is read from', function (string $field) {
+    $payload = $this->vector['payload'];
+    $payload[$field] = '';
+    $checksumString = implode(':', array_map(fn (mixed $value): string => (string) $value, array_values($payload)));
+
+    (new AyaPay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray(ayaSigned($payload, $checksumString)));
+})->with(['merchOrderId', 'tranId', 'amount', 'currenyCode', 'statusCode'])->throws(SignatureVerificationException::class, 'malformed');
+
+it('rejects a callback whose result fields are not strictly formatted', function (array $override) {
+    $payload = array_replace($this->vector['payload'], $override);
+    $checksumString = implode(':', array_map(fn (mixed $value): string => (string) $value, array_values($payload)));
+
+    (new AyaPay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray(ayaSigned($payload, $checksumString)));
+})->with([
+    'status code with a letter' => [['statusCode' => '0A']],
+    'three-digit status code' => [['statusCode' => '000']],
+    'other currency' => [['currenyCode' => '840']],
+    'two-digit currency' => [['currenyCode' => '10']],
+    'negative amount' => [['amount' => '-1000']],
+    'amount with two dots' => [['amount' => '1.0.0']],
+    'amount with a trailing dot' => [['amount' => '1000.']],
+    'colon in a user reference' => [['userRef1' => 'a:b']],
+    'colon in the description' => [['description' => 'Order: 1']],
+    'colon in the order id' => [['merchOrderId' => 'ORD:1']],
+    'malformed date time' => [['dateTime' => '2026-10-07T10:00:00']],
+    'date time with extra parts' => [['dateTime' => '2026-10-07 10:00:00:00']],
+])->throws(SignatureVerificationException::class, 'malformed');
+
+it('reads the currencyCode spelling and an empty date time', function () {
+    $payload = ['merchOrderId' => 'ORD123456', 'tranId' => 'T1', 'amount' => '1000.50', 'currencyCode' => '104', 'statusCode' => '00', 'dateTime' => ''];
+
+    $callback = (new AyaPay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray(ayaSigned($payload, 'ORD123456:T1:1000.50:104:00:')));
+
+    expect($callback->isSuccessful())->toBeTrue()->and($callback->amount)->toBe('1000.50');
+});
+
+it('rejects a ":" in the signed order fields', function (array $data, string $field) {
+    $build = fn () => new AyaPayPaymentData(...$data + ['orderId' => 'ORD123456', 'amount' => 1000, 'channel' => 'aya_pay', 'method' => AyaPayMethod::Qr]);
+
+    expect($build)->toThrow(fn (InvalidPaymentDataException $e) => expect($e->errors())->toBe([$field => "The {$field} field must not contain \":\"."]));
+})->with([
+    [['orderId' => 'ORD:123456'], 'orderId'],
+    [['description' => 'Order: 1'], 'description'],
+    [['userRefs' => ['cart', 'a:b']], 'userRefs'],
+]);
