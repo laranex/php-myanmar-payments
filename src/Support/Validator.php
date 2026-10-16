@@ -98,11 +98,24 @@ final class Validator
 
     public function url(string $field, ?string $value): self
     {
-        if ($value !== null && $value !== '' && (filter_var($value, FILTER_VALIDATE_URL) === false || ! in_array(strtolower((string) parse_url($value, PHP_URL_SCHEME)), ['http', 'https'], true))) {
+        if ($value !== null && $value !== '' && (filter_var($value, FILTER_VALIDATE_URL) === false || ! in_array(strtolower((string) parse_url($value, PHP_URL_SCHEME)), ['http', 'https'], true) || ! self::validPort($value))) {
             $this->fail($field, "The {$field} field must be a valid http or https URL.");
         }
 
         return $this;
+    }
+
+    /**
+     * Whether the URL's port, when it has one, is 1 to 5 digits up to 65535. FILTER_VALIDATE_URL also accepts an
+     * empty port or text after the digits (`https://shop.test:8a/`), which the other SDKs reject.
+     */
+    private static function validPort(string $url): bool
+    {
+        $authority = (string) preg_replace('~^[^:]+://([^/?#]*).*$~s', '$1', $url);
+        $host = substr($authority, (int) strrpos('@'.$authority, '@'));
+        $port = str_starts_with($host, '[') ? substr($host, (int) strpos($host, ']') + 1) : (string) strstr($host, ':');
+
+        return $port === '' || (preg_match('/^:[0-9]{1,5}\z/', $port) === 1 && (int) substr($port, 1) <= 65535);
     }
 
     public function when(bool $condition, string $field, string $message): self
