@@ -44,7 +44,7 @@ function fullEnv(): array
         'KBZ_PAY_APP_ID' => 'app', 'KBZ_PAY_APP_KEY' => 'key', 'KBZ_PAY_MERCHANT_CODE' => 'merchant', 'MYANMAR_PAYMENTS_HTTP_TIMEOUT' => ' 20 ',
         'KBZ_PAY_BASE_URL' => 'https://kbz.test/', 'KBZ_PAY_PWA_BASE_REDIRECT_URL' => 'https://pwa.test/#',
         'WAVE_MONEY_MERCHANT_ID' => 'm', 'WAVE_MONEY_SECRET_KEY' => 's', 'WAVE_MONEY_MERCHANT_NAME' => 'Shop', 'WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS' => ' 600 ',
-        'WAVE_MONEY_BASE_URL' => 'https://wave.test', 'WAVE_MONEY_AUTHENTICATE_URL' => 'https://wave-auth.test',
+        'WAVE_MONEY_BASE_URL' => 'https://wave.test',
         'AYA_PGW_APP_KEY' => 'k', 'AYA_PAY_APP_SECRET' => 's', 'AYA_PGW_BASE_URL' => 'https://aya.test',
         'YOMA_MMQR_MERCHANT_ID' => 'm', 'YOMA_MMQR_CLIENT_ID' => 'c', 'YOMA_MMQR_CLIENT_SECRET' => 's', 'YOMA_MMQR_WEBHOOK_HASHKEY' => 'h',
         'YOMA_MMQR_WEBHOOK_SECRET' => 'shared', 'YOMA_MMQR_BASE_URL' => 'https://yoma.test', 'YOMA_MMQR_API_VERSION' => 'v2',
@@ -62,7 +62,7 @@ it('reads every gateway from the same environment variables as the other SDKs', 
     $cs = CyberSourceConfig::fromEnv($env);
 
     expect([$kbz->appId, $kbz->appKey, $kbz->merchantCode, $kbz->timeoutSeconds, $kbz->apiUrl, $kbz->pwaUrl])->toBe(['app', 'key', 'merchant', 20, 'https://kbz.test', 'https://pwa.test/#/'])
-        ->and([$wave->merchantName, $wave->timeToLiveSeconds, $wave->timeoutSeconds, $wave->baseUrl, $wave->authenticateUrl])->toBe(['Shop', 600, 20, 'https://wave.test', 'https://wave-auth.test'])
+        ->and([$wave->merchantName, $wave->timeToLiveSeconds, $wave->timeoutSeconds, $wave->baseUrl])->toBe(['Shop', 600, 20, 'https://wave.test'])
         ->and([$aya->appKey, $aya->timeoutSeconds, $aya->baseUrl])->toBe(['k', 20, 'https://aya.test'])
         ->and([$yoma->webhookSecret, $yoma->timeoutSeconds, $yoma->baseUrl, $yoma->apiVersion])->toBe(['shared', 20, 'https://yoma.test', 'v2'])
         ->and([$cs->profileId, $cs->baseUrl])->toBe(['p', 'https://cs.test']);
@@ -139,7 +139,7 @@ it('treats blank overrides as unset', function () {
     $yoma = new YomaMmqrConfig('m', 'c', 's', 'h', 'v1rc', 30, webhookSecret: '', baseUrl: ' ');
 
     expect((new KbzPayConfig('a', 'k', 'm', 30, apiUrl: '', pwaUrl: ''))->apiUrl)->toBe(KbzPayConfig::PRODUCTION_API_URL)
-        ->and((new WaveMoneyConfig('m', 's', 'Shop', 300, 30, baseUrl: '', authenticateUrl: ''))->authenticateUrl)->toBe(WaveMoneyConfig::PRODUCTION_AUTHENTICATE_URL)
+        ->and((new WaveMoneyConfig('m', 's', 'Shop', 300, 30, baseUrl: ''))->baseUrl)->toBe(WaveMoneyConfig::PRODUCTION_URL)
         ->and((new AyaPayConfig('k', 's', 30, baseUrl: ''))->baseUrl)->toBe(AyaPayConfig::PRODUCTION_URL)
         ->and((new CyberSourceConfig('p', 'a', 's', baseUrl: ''))->baseUrl)->toBe(CyberSourceConfig::PRODUCTION_URL)
         ->and([$yoma->webhookSecret, $yoma->baseUrl, $yoma->apiVersion])->toBe([null, YomaMmqrConfig::PRODUCTION_URL, 'v1rc']);

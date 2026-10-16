@@ -52,6 +52,16 @@ it('posts a form encoded, hashed payment request and redirects to authenticate',
         ->and($payment->gatewayReference)->toBe('enc/123+abc');
 });
 
+it('requests and redirects on the base URL as it is, port included', function () {
+    $http = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => 'tx1']));
+    $config = new WaveMoneyConfig('testmerchantID', 'test-secret', 'Shop', 300, 30, baseUrl: 'https://preprodpayments.wavemoney.io:8107/');
+
+    $payment = (new WaveMoney($config, $http))->initiate($this->data);
+
+    expect((string) $http->getLastRequest()->getUri())->toBe('https://preprodpayments.wavemoney.io:8107/payment')
+        ->and($payment->url)->toBe('https://preprodpayments.wavemoney.io:8107/authenticate?transaction_id=tx1');
+});
+
 it('surfaces Wave errors', function (int $status, array $body, string $code) {
     $http = mockHttp(jsonResponse($body, $status));
 

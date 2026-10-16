@@ -113,7 +113,7 @@ class WaveMoney implements PaymentGateway
 
         return new RedirectPayment(
             orderId: $data->orderId,
-            url: "{$this->config->authenticateUrl}/authenticate?transaction_id=".urlencode($transactionId),
+            url: "{$this->config->baseUrl}/authenticate?transaction_id=".urlencode($transactionId),
             gatewayReference: $transactionId,
             raw: $body,
         );

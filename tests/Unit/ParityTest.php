@@ -132,7 +132,7 @@ function parityUrls(KbzPayConfig|WaveMoneyConfig|AyaPayConfig|YomaMmqrConfig|Cyb
 {
     return match (true) {
         $config instanceof KbzPayConfig => ['api_url' => $config->apiUrl, 'pwa_url' => $config->pwaUrl],
-        $config instanceof WaveMoneyConfig => ['base_url' => $config->baseUrl, 'authenticate_url' => $config->authenticateUrl],
+        $config instanceof WaveMoneyConfig => ['base_url' => $config->baseUrl],
         default => ['base_url' => $config->baseUrl],
     };
 }
