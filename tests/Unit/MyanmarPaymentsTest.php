@@ -9,8 +9,8 @@ use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPay;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPayConfig;
 use Laranex\PhpMyanmarPayments\MyanmarPayments;
-use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoney;
-use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyConfig;
+use Laranex\PhpMyanmarPayments\WavePay\WavePay;
+use Laranex\PhpMyanmarPayments\WavePay\WavePayConfig;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqr;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrConfig;
 
@@ -27,14 +27,14 @@ it('builds each configured gateway once', function () {
 it('builds every gateway from one configuration array', function () {
     $payments = new MyanmarPayments([
         'kbz_pay' => gatewayConfig('kbz_pay'),
-        'wave_money' => gatewayConfig('wave_money'),
+        'wave_pay' => gatewayConfig('wave_pay'),
         'aya_pay' => gatewayConfig('aya_pay'),
         'yoma_mmqr' => gatewayConfig('yoma_mmqr'),
         'cyber_source' => gatewayConfig('cyber_source'),
     ], mockHttp());
 
     expect($payments->kbzPay())->toBeInstanceOf(KbzPay::class)
-        ->and($payments->waveMoney())->toBeInstanceOf(WaveMoney::class)->toBe($payments->waveMoney())
+        ->and($payments->wavePay())->toBeInstanceOf(WavePay::class)->toBe($payments->wavePay())
         ->and($payments->ayaPay())->toBeInstanceOf(AyaPay::class)->toBe($payments->ayaPay())
         ->and($payments->yomaMmqr())->toBeInstanceOf(YomaMmqr::class)->toBe($payments->yomaMmqr())
         ->and($payments->cyberSource())->toBeInstanceOf(CyberSource::class)->toBe($payments->cyberSource());
@@ -52,8 +52,8 @@ it('reports the missing key for each unconfigured gateway', function (string $me
 ]);
 
 it('only complains about a gateway when it is used without configuration', function () {
-    (new MyanmarPayments([], mockHttp()))->waveMoney();
-})->throws(ConfigurationException::class, 'wave_money configuration is missing [merchant_id]');
+    (new MyanmarPayments([], mockHttp()))->wavePay();
+})->throws(ConfigurationException::class, 'wave_pay configuration is missing [merchant_id]');
 
 it('requires every setting except the HTTP timeout', function (string $key) {
     $config = gatewayConfig('aya_pay');
@@ -71,11 +71,11 @@ it('defaults the HTTP timeout when the constructor is not given one', function (
     $without = fn (string $gateway): array => array_diff_key(gatewayConfig($gateway), ['timeout_in_seconds' => true]);
 
     expect((new KbzPayConfig('a', 'b', 'c', 'https://kbz.test', 'https://pwa.test/#/', 15))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
-        ->and((new WaveMoneyConfig('m', 's', 'Shop', 'https://wave.test', 'https://wave.test', 300))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and((new WavePayConfig('m', 's', 'Shop', 'https://wave.test', 'https://wave.test', 300))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
         ->and((new AyaPayConfig('k', 's', 'https://aya.test'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
         ->and((new YomaMmqrConfig('M', 'c', 's', 'h', 'v1rc', 'shared', 'https://yoma.test'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
         ->and(KbzPayConfig::fromArray($without('kbz_pay'))->timeoutSeconds)->toBe(30)
-        ->and(WaveMoneyConfig::fromArray($without('wave_money'))->timeoutSeconds)->toBe(30)
+        ->and(WavePayConfig::fromArray($without('wave_pay'))->timeoutSeconds)->toBe(30)
         ->and(YomaMmqrConfig::fromArray($without('yoma_mmqr'))->timeoutSeconds)->toBe(30);
 });
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Laranex\PhpMyanmarPayments\WaveMoney;
+namespace Laranex\PhpMyanmarPayments\WavePay;
 
 use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
@@ -17,42 +17,45 @@ use Laranex\PhpMyanmarPayments\Support\Json;
 use Psr\Http\Client\ClientInterface;
 
 /**
- * Wave Money: redirect payments and callbacks. Wave has no status API, so the callback is the only result.
+ * Wave Pay (Pay with Wave API v1.3): redirect payments and callbacks. Wave has no status API, so the callback is
+ * the only result.
  */
-class WaveMoney implements PaymentGateway
+class WavePay implements PaymentGateway
 {
+    private const CURRENCY = 'MMK';
+
     private const STATUSES = [
         'PAYMENT_CONFIRMED' => PaymentStatus::Successful,
-        'INSUFFICIENT_BALANCE' => PaymentStatus::Pending,
-        'ACCOUNT_LOCKED' => PaymentStatus::Failed,
         'BILL_COLLECTION_FAILED' => PaymentStatus::Failed,
+        'INSUFFICIENT_BALANCE' => PaymentStatus::Failed,
+        'ACCOUNT_LOCKED' => PaymentStatus::Failed,
         'PAYMENT_REQUEST_CANCELLED' => PaymentStatus::Canceled,
         'TRANSACTION_TIMED_OUT' => PaymentStatus::Expired,
         'SCHEDULER_TRANSACTION_TIMED_OUT' => PaymentStatus::Expired,
     ];
 
-    public readonly WaveMoneyConfig $config;
+    public readonly WavePayConfig $config;
 
     private readonly Transport $transport;
 
-    private readonly WaveMoneySigner $signer;
+    private readonly WavePaySigner $signer;
 
     /**
-     * @param  WaveMoneyConfig|array<string, mixed>  $config  A config object or a `WaveMoneyConfig::fromArray()` array.
+     * @param  WavePayConfig|array<string, mixed>  $config  A config object or a `WavePayConfig::fromArray()` array.
      *
      * @throws ConfigurationException When a credential is missing.
      */
     public function __construct(
-        WaveMoneyConfig|array $config,
+        WavePayConfig|array $config,
         ?ClientInterface $httpClient = null,
     ) {
-        $this->config = $config instanceof WaveMoneyConfig ? $config : WaveMoneyConfig::fromArray($config);
+        $this->config = $config instanceof WavePayConfig ? $config : WavePayConfig::fromArray($config);
         $this->transport = new Transport($httpClient, $this->config->timeoutSeconds);
-        $this->signer = new WaveMoneySigner($this->config->secretKey);
+        $this->signer = new WavePaySigner($this->config->secretKey);
     }
 
     /**
-     * A gateway configured from the `WAVE_MONEY_*` environment variables.
+     * A gateway configured from the `WAVE_PAY_*` environment variables.
      *
      * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
      *
@@ -60,38 +63,49 @@ class WaveMoney implements PaymentGateway
      */
     public static function fromEnv(?array $env = null, ?ClientInterface $httpClient = null): self
     {
-        return new self(WaveMoneyConfig::fromEnv($env), $httpClient);
+        return new self(WavePayConfig::fromEnv($env), $httpClient);
     }
 
     /**
-     * Create a payment request and get Wave's page to redirect the customer to.
+     * Create a payment request (a JSON post to `{baseUrl}/payment`, currency MMK) and get Wave's page to redirect the
+     * customer to (`{baseRedirectUrl}/authenticate?transaction_id=...`).
      *
      * @throws ApiException
      */
-    public function initiate(WaveMoneyPaymentData $data): RedirectPayment
+    public function initiate(WavePayPaymentData $data): RedirectPayment
     {
         $timeToLiveSeconds = $data->timeToLiveSeconds ?? $this->config->timeToLiveSeconds;
 
-        $response = $this->transport->postForm("{$this->config->baseUrl}/payment", [
-            'time_to_live_in_seconds' => (string) $timeToLiveSeconds,
+        $amount = $data->amount->toString();
+        $payload = [
             'merchant_id' => $this->config->merchantId,
             'order_id' => $data->orderId,
             'merchant_reference_id' => $data->merchantReferenceId,
             'frontend_result_url' => $data->returnUrl,
             'backend_result_url' => $data->callbackUrl,
-            'amount' => $data->amount->toString(),
+            'amount' => (int) $amount,
+            'time_to_live_in_seconds' => $timeToLiveSeconds,
             'payment_description' => $data->description,
-            'merchant_name' => $data->merchantName ?? $this->config->merchantName,
-            'items' => json_encode(array_map(fn (WaveMoneyItem $item): array => $item->toArray(), $data->items), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            'currency' => self::CURRENCY,
             'hash' => $this->signer->requestHash(
                 $timeToLiveSeconds,
                 $this->config->merchantId,
                 $data->orderId,
-                $data->amount->toString(),
+                $amount,
                 $data->callbackUrl,
                 $data->merchantReferenceId,
             ),
-        ]);
+            'merchant_name' => $data->merchantName ?? $this->config->merchantName,
+            'items' => (string) json_encode(array_map(fn (WavePayItem $item): array => $item->toArray(), $data->items), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ];
+
+        foreach (['additional_field_3' => $data->additionalField3, 'additional_field_4' => $data->additionalField4, 'additional_field_5' => $data->additionalField5] as $field => $value) {
+            if ($value !== null && $value !== '') {
+                $payload[$field] = $value;
+            }
+        }
+
+        $response = $this->transport->postJson("{$this->config->baseUrl}/payment", $payload);
 
         $body = $response->json();
         $transactionId = $body['transaction_id'] ?? null;
@@ -100,7 +114,7 @@ class WaveMoney implements PaymentGateway
             $message = $this->errorMessage($body);
 
             throw new ApiException(
-                "Wave Money payment request failed with HTTP {$response->status}: {$message}",
+                "Wave Pay payment request failed with HTTP {$response->status}: {$message}",
                 gatewayCode: isset($body['errors']) ? 'VALIDATION_ERROR' : (isset($body['message']) ? (string) $body['message'] : null),
                 gatewayMessage: $message,
                 httpStatus: $response->status,
@@ -119,7 +133,7 @@ class WaveMoney implements PaymentGateway
     /**
      * Verify Wave's callback. Only `PAYMENT_CONFIRMED` means the customer paid.
      *
-     * `orderId` falls back to `merchantReferenceId` when it is missing, null or empty, because Wave marks `orderId` as optional.
+     * `orderId` falls back to `merchantReferenceId` when it is missing, null or empty, as a safeguard: earlier Wave documents marked `orderId` optional.
      * Wave's hash joins the values with no separator, so after the hash matches the amount must be a non-negative
      * decimal, at least one of `orderId` / `merchantReferenceId` must be present, and each (when sent) may only hold
      * letters, digits, `_` and `-`.
@@ -131,11 +145,11 @@ class WaveMoney implements PaymentGateway
         $payload = $request->parsedBody();
 
         if (! $this->signer->verifyCallback($payload)) {
-            throw new SignatureVerificationException('Wave Money callback hash verification failed.', $payload);
+            throw new SignatureVerificationException('Wave Pay callback hash verification failed.', $payload);
         }
 
         if (! self::wellFormed($payload)) {
-            throw new SignatureVerificationException('Wave Money callback is malformed.', $payload);
+            throw new SignatureVerificationException('Wave Pay callback is malformed.', $payload);
         }
 
         $gatewayStatus = trim((string) ($payload['status'] ?? ''));

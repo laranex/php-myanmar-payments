@@ -8,19 +8,19 @@ use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
-use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoney;
-use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyConfig;
-use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyItem;
-use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyPaymentData;
+use Laranex\PhpMyanmarPayments\WavePay\WavePay;
+use Laranex\PhpMyanmarPayments\WavePay\WavePayConfig;
+use Laranex\PhpMyanmarPayments\WavePay\WavePayItem;
+use Laranex\PhpMyanmarPayments\WavePay\WavePayPaymentData;
 
 beforeEach(function () {
-    $this->config = WaveMoneyConfig::fromArray(gatewayConfig('wave_money'));
-    $this->data = new WaveMoneyPaymentData(
+    $this->config = WavePayConfig::fromArray(gatewayConfig('wave_pay'));
+    $this->data = new WavePayPaymentData(
         orderId: '100',
         callbackUrl: 'https://shop.test/wave/callback',
         returnUrl: 'https://shop.test/done',
         description: 'Order 100',
-        items: [new WaveMoneyItem('Shoes', 600), new WaveMoneyItem('Socks', 400)],
+        items: [new WavePayItem('Shoes', 600), new WavePayItem('Socks', 400)],
         merchantReferenceId: 'ref-001',
     );
 });
@@ -36,37 +36,76 @@ function signWaveCallback(array $payload, string $secret = 'test-secret'): Callb
     return CallbackRequest::fromArray($payload);
 }
 
-it('posts a form encoded, hashed payment request and redirects to authenticate', function () {
+it('posts a hashed JSON payment request and redirects to authenticate', function () {
     $http = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => 'enc/123+abc']));
 
-    $payment = (new WaveMoney($this->config, $http))->initiate($this->data);
+    $payment = (new WavePay($this->config, $http))->initiate($this->data);
 
     $request = $http->getLastRequest();
-    $form = requestForm($request);
     expect((string) $request->getUri())->toBe('https://payments.wavemoney.io/payment')
-        ->and($request->getHeaderLine('Content-Type'))->toBe('application/x-www-form-urlencoded')
-        ->and($form)->toMatchArray(['order_id' => '100', 'merchant_reference_id' => 'ref-001', 'amount' => '1000', 'merchant_name' => 'Shop'])
-        ->and(json_decode($form['items'], true))->toBe([['name' => 'Shoes', 'amount' => 600], ['name' => 'Socks', 'amount' => 400]])
-        ->and($form['hash'])->toBe(hash_hmac('sha256', '300testmerchantID1001000https://shop.test/wave/callbackref-001', 'test-secret'))
+        ->and($request->getMethod())->toBe('POST')
+        ->and($request->getHeaderLine('Content-Type'))->toBe('application/json')
+        ->and($request->getHeaderLine('Accept'))->toBe('application/json')
+        ->and(requestJson($request))->toBe([
+            'merchant_id' => 'testmerchantID',
+            'order_id' => '100',
+            'merchant_reference_id' => 'ref-001',
+            'frontend_result_url' => 'https://shop.test/done',
+            'backend_result_url' => 'https://shop.test/wave/callback',
+            'amount' => 1000,
+            'time_to_live_in_seconds' => 300,
+            'payment_description' => 'Order 100',
+            'currency' => 'MMK',
+            'hash' => hash_hmac('sha256', '300testmerchantID1001000https://shop.test/wave/callbackref-001', 'test-secret'),
+            'merchant_name' => 'Shop',
+            'items' => '[{"name":"Shoes","amount":600},{"name":"Socks","amount":400}]',
+        ])
         ->and($payment->url)->toBe('https://payments.wavemoney.io/authenticate?transaction_id=enc%2F123%2Babc')
         ->and($payment->gatewayReference)->toBe('enc/123+abc');
 });
 
+it('sends the additional fields only when they are set', function () {
+    $http = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => 'tx1']));
+    $data = new WavePayPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WavePayItem('A', 10)], additionalField3: 'Info 1', additionalField4: '', additionalField5: 'Info 3');
+
+    (new WavePay($this->config, $http))->initiate($data);
+
+    $body = requestJson($http->getLastRequest());
+    expect($body)->toMatchArray(['additional_field_3' => 'Info 1', 'additional_field_5' => 'Info 3'])
+        ->and($body)->not->toHaveKey('additional_field_4');
+});
+
+it('enforces the documented field limits', function (string $field, string $value, int $max) {
+    $arguments = ['orderId' => '100', 'callbackUrl' => 'https://shop.test/cb', 'returnUrl' => 'https://shop.test/done', 'description' => 'x', 'items' => [new WavePayItem('A', 10)]];
+
+    expect(fn () => new WavePayPaymentData(...[...$arguments, $field => $value]))
+        ->toThrow(fn (InvalidPaymentDataException $e) => expect($e->errors())->toBe([$field => "The {$field} field must not be greater than {$max} characters."]));
+})->with([
+    ['orderId', str_repeat('1', 101), 100],
+    ['merchantReferenceId', str_repeat('r', 101), 100],
+    ['callbackUrl', 'https://shop.test/'.str_repeat('a', 238), 255],
+    ['returnUrl', 'https://shop.test/'.str_repeat('a', 238), 255],
+    ['description', str_repeat('d', 256), 255],
+    ['additionalField3', str_repeat('x', 51), 50],
+    ['additionalField4', str_repeat('x', 51), 50],
+    ['additionalField5', str_repeat('x', 51), 50],
+]);
+
 it('requests payments on the base URL and sends the customer to the base redirect URL', function () {
     $http = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => 'tx1']));
-    $config = WaveMoneyConfig::fromArray(gatewayConfig('wave_money', ['base_url' => 'https://preprodpayments.wavemoney.io:8107/', 'base_redirect_url' => 'https://preprodpayments.wavemoney.io/']));
+    $config = WavePayConfig::fromArray(gatewayConfig('wave_pay', ['base_url' => 'https://preprodpayments.wavemoney.io:8107/', 'base_redirect_url' => 'https://preprodpayments.wavemoney.io:8107/']));
 
-    $payment = (new WaveMoney($config, $http))->initiate($this->data);
+    $payment = (new WavePay($config, $http))->initiate($this->data);
 
     expect((string) $http->getLastRequest()->getUri())->toBe('https://preprodpayments.wavemoney.io:8107/payment')
-        ->and($payment->url)->toBe('https://preprodpayments.wavemoney.io/authenticate?transaction_id=tx1');
+        ->and($payment->url)->toBe('https://preprodpayments.wavemoney.io:8107/authenticate?transaction_id=tx1');
 });
 
 it('surfaces Wave errors', function (int $status, array $body, string $code) {
     $http = mockHttp(jsonResponse($body, $status));
 
     try {
-        (new WaveMoney($this->config, $http))->initiate($this->data);
+        (new WavePay($this->config, $http))->initiate($this->data);
     } catch (ApiException $e) {
         expect($e->httpStatus)->toBe($status)->and($e->gatewayCode)->toBe($code);
 
@@ -77,23 +116,24 @@ it('surfaces Wave errors', function (int $status, array $body, string $code) {
 })->with([
     'duplicate' => [409, ['message' => 'Record already exists'], 'Record already exists'],
     'bad hash' => [400, ['message' => 'INVALID_HASH'], 'INVALID_HASH'],
+    'unknown merchant' => [404, ['message' => 'No record found'], 'No record found'],
     'validation' => [422, ['errors' => ['amount' => ['The amount must be an integer.']]], 'VALIDATION_ERROR'],
 ]);
 
 it('defaults the amount to the item total and generates a unique reference per attempt', function () {
-    $first = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 250)]);
-    $second = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 250)]);
+    $first = new WavePayPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WavePayItem('A', 250)]);
+    $second = new WavePayPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WavePayItem('A', 250)]);
 
     expect($first->amount->toString())->toBe('250')
         ->and($first->merchantReferenceId)->not->toBe($second->merchantReferenceId);
 });
 
 it('hashes the callback in the documented order with null as "null"', function () {
-    $vector = testVector('wave_money/callback.json');
+    $vector = testVector('wave_pay/callback.json');
     $payload = $vector['payload'];
     $payload['hashValue'] = hash_hmac('sha256', $vector['hash_string'], $vector['secret_key']);
 
-    $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
+    $callback = (new WavePay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
 
     expect($callback->isSuccessful())->toBeTrue()
         ->and($callback->orderId)->toBe('100')
@@ -102,16 +142,16 @@ it('hashes the callback in the documented order with null as "null"', function (
 });
 
 it('maps every documented callback status', function (string $status, PaymentStatus $expected) {
-    $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback([
+    $callback = (new WavePay($this->config, mockHttp()))->handleCallback(signWaveCallback([
         'status' => $status, 'merchantId' => 'testmerchantID', 'orderId' => '100', 'amount' => '1000', 'merchantReferenceId' => 'ref-001', 'timeToLiveSeconds' => 300,
     ]));
 
     expect($callback->status)->toBe($expected)->and($callback->gatewayStatus)->toBe($status);
 })->with([
     ['PAYMENT_CONFIRMED', PaymentStatus::Successful],
-    ['INSUFFICIENT_BALANCE', PaymentStatus::Pending],
-    ['ACCOUNT_LOCKED', PaymentStatus::Failed],
     ['BILL_COLLECTION_FAILED', PaymentStatus::Failed],
+    ['INSUFFICIENT_BALANCE', PaymentStatus::Failed],
+    ['ACCOUNT_LOCKED', PaymentStatus::Failed],
     ['PAYMENT_REQUEST_CANCELLED', PaymentStatus::Canceled],
     ['TRANSACTION_TIMED_OUT', PaymentStatus::Expired],
     ['SCHEDULER_TRANSACTION_TIMED_OUT', PaymentStatus::Expired],
@@ -119,7 +159,7 @@ it('maps every documented callback status', function (string $status, PaymentSta
 ]);
 
 it('falls back to merchantReferenceId when the callback orderId is missing, null or empty', function (array $orderId) {
-    $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback([
+    $callback = (new WavePay($this->config, mockHttp()))->handleCallback(signWaveCallback([
         'status' => 'PAYMENT_CONFIRMED', 'merchantReferenceId' => 'ref-001', 'amount' => '1000', ...$orderId,
     ]));
 
@@ -131,15 +171,15 @@ it('falls back to merchantReferenceId when the callback orderId is missing, null
 ]);
 
 it('rejects a callback signed with another key', function () {
-    (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback(['status' => 'PAYMENT_CONFIRMED', 'orderId' => '100'], 'wrong'));
+    (new WavePay($this->config, mockHttp()))->handleCallback(signWaveCallback(['status' => 'PAYMENT_CONFIRMED', 'orderId' => '100'], 'wrong'));
 })->throws(SignatureVerificationException::class);
 
 it('requires at least one item', function () {
-    new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', []);
+    new WavePayPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'x', []);
 })->throws(InvalidPaymentDataException::class, 'at least one item');
 
 it('accepts http and non-standard port callback URLs', function (string $url) {
-    expect((new WaveMoneyPaymentData('100', $url, 'http://shop.test/done', 'x', [new WaveMoneyItem('A', 250)]))->callbackUrl)->toBe($url);
+    expect((new WavePayPaymentData('100', $url, 'http://shop.test/done', 'x', [new WavePayItem('A', 250)]))->callbackUrl)->toBe($url);
 })->with(['http://shop.test/cb', 'https://shop.test:8443/cb']);
 
 it('rejects a callback whose signed fields are not scalar', function () {
@@ -147,25 +187,25 @@ it('rejects a callback whose signed fields are not scalar', function () {
     $payload = $request->parsedBody();
     $payload['orderId'] = ['100'];
 
-    (new WaveMoney($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
+    (new WavePay($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
 })->throws(SignatureVerificationException::class);
 
 it('rejects a time to live that is not greater than 0', function () {
-    $message = 'The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0.';
+    $message = 'The wave_pay configuration [time_to_live_in_seconds] must be a whole number greater than 0.';
 
-    expect(fn () => new WaveMoneyConfig('m', 's', 'Shop', 'https://payments.wavemoney.io', 'https://payments.wavemoney.io', timeToLiveSeconds: 0))->toThrow(ConfigurationException::class, $message)
-        ->and(fn () => WaveMoneyConfig::fromArray(gatewayConfig('wave_money', ['time_to_live_in_seconds' => '-5'])))->toThrow(ConfigurationException::class, $message);
+    expect(fn () => new WavePayConfig('m', 's', 'Shop', 'https://payments.wavemoney.io', 'https://payments.wavemoney.io', timeToLiveSeconds: 0))->toThrow(ConfigurationException::class, $message)
+        ->and(fn () => WavePayConfig::fromArray(gatewayConfig('wave_pay', ['time_to_live_in_seconds' => '-5'])))->toThrow(ConfigurationException::class, $message);
 });
 
 it('requires the URLs and the time to live', function (string $key) {
-    expect(WaveMoneyConfig::fromArray(gatewayConfig('wave_money', ['time_to_live_in_seconds' => '600']))->timeToLiveSeconds)->toBe(600);
+    expect(WavePayConfig::fromArray(gatewayConfig('wave_pay', ['time_to_live_in_seconds' => '600']))->timeToLiveSeconds)->toBe(600);
 
-    expect(fn () => WaveMoneyConfig::fromArray(gatewayConfig('wave_money', [$key => ' '])))
-        ->toThrow(ConfigurationException::class, "The wave_money configuration is missing [{$key}].");
+    expect(fn () => WavePayConfig::fromArray(gatewayConfig('wave_pay', [$key => ' '])))
+        ->toThrow(ConfigurationException::class, "The wave_pay configuration is missing [{$key}].");
 })->with(['base_url', 'base_redirect_url', 'time_to_live_in_seconds']);
 
 it('generates a merchant reference id when an empty one is given', function () {
-    $data = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WaveMoneyItem('A', 1000)], merchantReferenceId: '');
+    $data = new WavePayPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WavePayItem('A', 1000)], merchantReferenceId: '');
 
     expect($data->merchantReferenceId)->toMatch('/^[0-9a-f]{32}$/');
 });
@@ -176,7 +216,7 @@ it('hashes boolean and numeric callback values as their JSON text', function () 
     $payload['hashValue'] = hash_hmac('sha256', implode('', array_map(fn ($field) => $payload[$field] ?? 'null', $fields)), 'test-secret');
     $body = strtr((string) json_encode($payload), ['"timeToLiveSeconds":"300"' => '"timeToLiveSeconds":300', '"amount":"1000.00"' => '"amount":1000.00', '"initiatorMsisdn":"true"' => '"initiatorMsisdn":true']);
 
-    $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(new CallbackRequest($body));
+    $callback = (new WavePay($this->config, mockHttp()))->handleCallback(new CallbackRequest($body));
 
     expect($callback->amount)->toBe('1000.00')->and($callback->isSuccessful())->toBeTrue();
 });
@@ -184,7 +224,7 @@ it('hashes boolean and numeric callback values as their JSON text', function () 
 it('rejects a correctly hashed callback whose values are malformed', function (array $override) {
     $payload = array_replace(['status' => 'PAYMENT_CONFIRMED', 'orderId' => '100', 'amount' => '1000', 'merchantReferenceId' => 'ref-001', 'transactionId' => '360'], $override);
 
-    (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback($payload));
+    (new WavePay($this->config, mockHttp()))->handleCallback(signWaveCallback($payload));
 })->with([
     'missing amount' => [['amount' => null]],
     'negative amount' => [['amount' => '-1000']],
@@ -194,10 +234,10 @@ it('rejects a correctly hashed callback whose values are malformed', function (a
     'order id with a separator-like value' => [['orderId' => '100:1000']],
     'reference id with a slash' => [['merchantReferenceId' => 'ref/001']],
     'neither order id nor reference id' => [['orderId' => null, 'merchantReferenceId' => '']],
-])->throws(SignatureVerificationException::class, 'Wave Money callback is malformed.');
+])->throws(SignatureVerificationException::class, 'Wave Pay callback is malformed.');
 
 it('accepts a decimal amount and order ids with "_" and "-"', function () {
-    $callback = (new WaveMoney($this->config, mockHttp()))->handleCallback(signWaveCallback([
+    $callback = (new WavePay($this->config, mockHttp()))->handleCallback(signWaveCallback([
         'status' => 'PAYMENT_CONFIRMED', 'orderId' => 'ORDER_1-a', 'amount' => '1000.00', 'merchantReferenceId' => 'Ref_1-b',
     ]));
 
@@ -205,7 +245,7 @@ it('accepts a decimal amount and order ids with "_" and "-"', function () {
 });
 
 it('only creates payments whose ids its own callback check accepts', function (string $orderId, ?string $reference, string $field) {
-    expect(fn () => new WaveMoneyPaymentData($orderId, 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WaveMoneyItem('A', 1000)], merchantReferenceId: $reference))
+    expect(fn () => new WavePayPaymentData($orderId, 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WavePayItem('A', 1000)], merchantReferenceId: $reference))
         ->toThrow(fn (InvalidPaymentDataException $e) => expect($e->errors())->toBe([$field => "The {$field} field may only contain letters, numbers, underscores and dashes."]));
 })->with([
     ['Order 1', 'ref-001', 'orderId'],

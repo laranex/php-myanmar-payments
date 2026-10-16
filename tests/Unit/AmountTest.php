@@ -6,8 +6,8 @@ use Laranex\PhpMyanmarPayments\Amount;
 use Laranex\PhpMyanmarPayments\AyaPay\AyaPayMethod;
 use Laranex\PhpMyanmarPayments\AyaPay\AyaPayPaymentData;
 use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
-use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyItem;
-use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyPaymentData;
+use Laranex\PhpMyanmarPayments\WavePay\WavePayItem;
+use Laranex\PhpMyanmarPayments\WavePay\WavePayPaymentData;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrPaymentData;
 
 it('parses plain decimal strings, keeping the fraction exactly and dropping leading zeros', function (string $input, int $decimals, string $whole, string $expected) {
@@ -58,15 +58,15 @@ it('is rejected with decimals by gateways whose docs only allow whole kyat', fun
 
     $this->fail('No validation error was thrown.');
 })->with([
-    'Wave Money item' => [fn () => new WaveMoneyPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', Amount::parse('10.50'))]), 'Wave Money', 'items.0.amount'],
-    'Wave Money total' => [fn () => new WaveMoneyPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WaveMoneyItem('A', 10)], Amount::parse('10.50')), 'Wave Money', 'amount'],
+    'Wave Pay item' => [fn () => new WavePayPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WavePayItem('A', Amount::parse('10.50'))]), 'Wave Pay', 'items.0.amount'],
+    'Wave Pay total' => [fn () => new WavePayPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WavePayItem('A', 10)], Amount::parse('10.50')), 'Wave Pay', 'amount'],
     'AYA Pay' => [fn () => new AyaPayPaymentData('ORDER123', Amount::parse('10.50'), 'aya_pay', AyaPayMethod::Qr), 'AYA Payment Gateway', 'amount'],
     'Yoma MMQR' => [fn () => new YomaMmqrPaymentData('ORD-1', Amount::parse('10.50'), 'x'), 'Yoma MMQR', 'amount'],
 ]);
 
 it('sums Wave items without floats', function () {
-    $data = new WaveMoneyPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [
-        new WaveMoneyItem('A', 600), new WaveMoneyItem('B', Amount::kyat(400)), new WaveMoneyItem('C', Amount::parse('5')),
+    $data = new WavePayPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [
+        new WavePayItem('A', 600), new WavePayItem('B', Amount::kyat(400)), new WavePayItem('C', Amount::parse('5')),
     ]);
 
     expect($data->amount->toString())->toBe('1005')

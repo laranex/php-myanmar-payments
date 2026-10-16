@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Laranex\PhpMyanmarPayments\WaveMoney;
+namespace Laranex\PhpMyanmarPayments\WavePay;
 
 use Laranex\PhpMyanmarPayments\Support\Json;
 
@@ -11,7 +11,7 @@ use Laranex\PhpMyanmarPayments\Support\Json;
  *
  * @internal
  */
-final class WaveMoneySigner
+final class WavePaySigner
 {
     private const CALLBACK_FIELDS = [
         'status',

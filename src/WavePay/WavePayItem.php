@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Laranex\PhpMyanmarPayments\WaveMoney;
+namespace Laranex\PhpMyanmarPayments\WavePay;
 
 use Laranex\PhpMyanmarPayments\Amount;
 use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 
 /**
- * A line item shown on Wave's payment page. `WaveMoneyPaymentData` validates it (`items.<i>.name`, `items.<i>.amount`).
+ * A line item shown on Wave's payment page. `WavePayPaymentData` validates it (`items.<i>.name`, `items.<i>.amount`).
  */
-final class WaveMoneyItem
+final class WavePayItem
 {
     /**
      * Item amount in whole kyat.
