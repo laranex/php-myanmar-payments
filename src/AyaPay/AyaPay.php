@@ -54,7 +54,7 @@ class AyaPay implements PaymentGateway
     }
 
     /**
-     * A gateway configured from the `AYA_PAY_*` (or `AYA_PGW_*`) environment variables.
+     * A gateway configured from the `AYA_PAY_*` environment variables.
      *
      * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
      *

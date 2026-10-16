@@ -45,7 +45,7 @@ function fullEnv(): array
         'KBZ_PAY_BASE_URL' => 'https://kbz.test/', 'KBZ_PAY_PWA_BASE_REDIRECT_URL' => 'https://pwa.test/#', 'KBZ_PAY_TIME_TO_LIVE_IN_MINUTES' => ' 30 ',
         'WAVE_MONEY_MERCHANT_ID' => 'm', 'WAVE_MONEY_SECRET_KEY' => 's', 'WAVE_MONEY_MERCHANT_NAME' => 'Shop', 'WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS' => ' 600 ',
         'WAVE_MONEY_BASE_URL' => 'https://wave.test', 'WAVE_MONEY_BASE_REDIRECT_URL' => 'https://pay.wave.test/',
-        'AYA_PGW_APP_KEY' => 'k', 'AYA_PAY_APP_SECRET' => 's', 'AYA_PGW_BASE_URL' => 'https://aya.test',
+        'AYA_PAY_APP_KEY' => 'k', 'AYA_PAY_APP_SECRET' => 's', 'AYA_PAY_BASE_URL' => 'https://aya.test',
         'YOMA_MMQR_MERCHANT_ID' => 'm', 'YOMA_MMQR_CLIENT_ID' => 'c', 'YOMA_MMQR_CLIENT_SECRET' => 's', 'YOMA_MMQR_WEBHOOK_HASHKEY' => 'h',
         'YOMA_MMQR_WEBHOOK_SECRET' => 'shared', 'YOMA_MMQR_BASE_URL' => 'https://yoma.test', 'YOMA_MMQR_API_VERSION' => 'v2',
         'CYBER_SOURCE_PROFILE_ID' => 'p', 'CYBER_SOURCE_ACCESS_KEY' => 'a', 'CYBER_SOURCE_SECRET_KEY' => 's',

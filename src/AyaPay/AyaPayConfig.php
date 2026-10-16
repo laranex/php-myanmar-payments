@@ -59,8 +59,7 @@ final class AyaPayConfig
     }
 
     /**
-     * Read `AYA_PAY_APP_KEY`, `AYA_PAY_APP_SECRET`, `AYA_PAY_BASE_URL` and `MYANMAR_PAYMENTS_HTTP_TIMEOUT`, falling
-     * back to the `AYA_PGW_*` names.
+     * Read `AYA_PAY_APP_KEY`, `AYA_PAY_APP_SECRET`, `AYA_PAY_BASE_URL` and `MYANMAR_PAYMENTS_HTTP_TIMEOUT`.
      *
      * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
      *
@@ -71,10 +70,10 @@ final class AyaPayConfig
         $env = new Env($env);
 
         return self::fromArray([
-            'app_key' => $env->first('AYA_PAY_APP_KEY', 'AYA_PGW_APP_KEY'),
-            'app_secret' => $env->first('AYA_PAY_APP_SECRET', 'AYA_PGW_APP_SECRET'),
+            'app_key' => $env->first('AYA_PAY_APP_KEY'),
+            'app_secret' => $env->first('AYA_PAY_APP_SECRET'),
             'timeout_in_seconds' => $env->first('MYANMAR_PAYMENTS_HTTP_TIMEOUT'),
-            'base_url' => $env->first('AYA_PAY_BASE_URL', 'AYA_PGW_BASE_URL'),
+            'base_url' => $env->first('AYA_PAY_BASE_URL'),
         ]);
     }
 }
