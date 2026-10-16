@@ -6,7 +6,7 @@ namespace Laranex\PhpMyanmarPayments\Exceptions;
 
 /**
  * Thrown when a gateway is missing a credential or setting it needs, or a time setting is out of range (a whole
- * number greater than 0, or for KBZ Pay's time to live a multiple of 60 from 60 to 7200).
+ * number greater than 0, or for KBZ Pay's time to live a whole number from 1 to 120).
  */
 class ConfigurationException extends PaymentException
 {

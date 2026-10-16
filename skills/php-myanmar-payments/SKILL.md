@@ -23,7 +23,7 @@ Requires PHP 8.1+ and any PSR-18 HTTP client (Guzzle is one); the client is auto
 
 ## Configure
 
-`MyanmarPayments::fromEnv()` reads `KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*`, `YOMA_MMQR_*`, `CYBER_SOURCE_*` and `MYANMAR_PAYMENTS_HTTP_TIMEOUT` (the same variables as the Go, Node and Python SDKs). Every setting of a gateway you use is required and has no default, except the HTTP timeout in seconds (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, for every gateway except CyberSource), which defaults to 30 (`MyanmarPayments::DEFAULT_TIMEOUT_SECONDS`). That includes the URLs (`KBZ_PAY_BASE_URL`, `KBZ_PAY_PWA_BASE_REDIRECT_URL`, `WAVE_MONEY_BASE_URL`, `WAVE_MONEY_BASE_REDIRECT_URL`, `AYA_PAY_BASE_URL`, `YOMA_MMQR_BASE_URL`, `CYBER_SOURCE_BASE_URL`: production's or the gateway's UAT ones; the config classes' `PRODUCTION_*` constants name production's), the time to live (`KBZ_PAY_TIME_TO_LIVE_IN_MINUTES`, 1 to 120; `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS`, greater than 0; a payment's `timeToLiveMinutes` / `timeToLiveSeconds` overrides them), `YOMA_MMQR_WEBHOOK_SECRET` (every Yoma callback must carry it in `X-Webhook-Secret`), `WAVE_MONEY_MERCHANT_NAME` and `YOMA_MMQR_API_VERSION` (e.g. `v1rc`). Wave Money requests payments at `WAVE_MONEY_BASE_URL`'s `/payment` and sends the customer to `WAVE_MONEY_BASE_REDIRECT_URL`'s `/authenticate`.
+`MyanmarPayments::fromEnv()` reads `KBZ_PAY_*`, `WAVE_MONEY_*`, `AYA_PAY_*`, `YOMA_MMQR_*`, `CYBER_SOURCE_*` and `MYANMAR_PAYMENTS_HTTP_TIMEOUT` (the same variables as the Go, Node and Python SDKs). Every setting of a gateway you use is required and has no default, except the HTTP timeout in seconds (`MYANMAR_PAYMENTS_HTTP_TIMEOUT`, for every gateway except CyberSource), which defaults to 30 (`MyanmarPayments::DEFAULT_TIMEOUT_SECONDS`). That includes the URLs (`KBZ_PAY_BASE_URL`, `KBZ_PAY_PWA_BASE_REDIRECT_URL`, `WAVE_MONEY_BASE_URL`, `WAVE_MONEY_BASE_REDIRECT_URL`, `AYA_PAY_BASE_URL`, `YOMA_MMQR_BASE_URL`, `CYBER_SOURCE_BASE_URL`: production's or the gateway's UAT ones; the config classes' `PRODUCTION_*` constants name production's), the time to live (`KBZ_PAY_TIME_TO_LIVE_IN_MINUTES`, 1 to 120; `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS`, greater than 0; a payment's `timeToLiveMinutes` / `timeToLiveSeconds` overrides them), `YOMA_MMQR_WEBHOOK_SECRET` (every Yoma callback must carry it in `X-Webhook-Secret`), `WAVE_MONEY_MERCHANT_NAME` and `YOMA_MMQR_API_VERSION` (e.g. `v1rc`).
 
 ```php
 use Laranex\PhpMyanmarPayments\MyanmarPayments;
@@ -32,11 +32,11 @@ $payments = MyanmarPayments::fromEnv(); // create once, share across requests
 $kbzPay = $payments->kbzPay(); // also waveMoney(), ayaPay(), yomaMmqr(), cyberSource()
 ```
 
-- Or build one gateway: `new KbzPay(new KbzPayConfig(appId: '...', appKey: '...', merchantCode: '...'))`, `KbzPay::fromEnv()` or `new KbzPay(KbzPayConfig::fromEnv())`.
-- Or pass the settings directly: gateways and `new MyanmarPayments([...])` take config objects or snake_case arrays (`['kbz_pay' => ['app_id' => '...', 'app_key' => '...', 'merchant_code' => '...']]`; add `timeoutSeconds` / `timeout_in_seconds` to change the 30-second timeout).
+- Or build one gateway: `new KbzPay(new KbzPayConfig(appId: '...', appKey: '...', merchantCode: '...', apiUrl: KbzPayConfig::PRODUCTION_API_URL, pwaUrl: KbzPayConfig::PRODUCTION_PWA_URL, timeToLiveMinutes: 15))`, `KbzPay::fromEnv()` or `new KbzPay(KbzPayConfig::fromEnv())`.
+- Or pass the settings directly: gateways and `new MyanmarPayments([...])` take config objects or snake_case arrays (`['kbz_pay' => ['app_id' => '...', 'app_key' => '...', 'merchant_code' => '...', 'api_url' => '...', 'pwa_url' => '...', 'time_to_live_in_minutes' => 15]]`; add `timeout_in_seconds` to change the 30-second timeout).
 - Options: a PSR-18 client (second argument of `KbzPay`, `WaveMoney`, `AyaPay`, `YomaMmqr` and `MyanmarPayments`; without one, Guzzle gets the configured `timeoutSeconds`, 30 by default; a client you pass keeps its own timeout). Yoma and the facade also take a PSR-16 cache for the access token.
 - Yoma MMQR needs a shared PSR-16 cache in production (`new YomaMmqr($config, $client, $cache)` or `MyanmarPayments::fromEnv(cache: $cache)`). The default in-memory `ArrayCache` dies with the PHP process, so a PHP-FPM app without one fetches a new access token on every request.
-- A missing setting throws `ConfigurationException` (`gateway`, `key`); so does a time setting that is not a whole number greater than 0.
+- A missing setting throws `ConfigurationException` (`gateway`, `key`); so does an invalid time setting (a whole number greater than 0; `KBZ_PAY_TIME_TO_LIVE_IN_MINUTES` from 1 to 120).
 
 ## Use
 
@@ -60,7 +60,7 @@ $payment = $kbzPay->pwa(new KbzPayPaymentData(
 header('Location: '.$payment->url);
 ```
 
-- `RedirectPayment` (`url`) from `$kbzPay->pwa($data)` and `$waveMoney->initiate($data)`. Wave fills `$data->merchantReferenceId` when empty; store it. Wave's `orderId` and `merchantReferenceId` may only hold letters, numbers, `_` and `-`. Pass `merchantName` or `timeToLiveSeconds` to `WaveMoneyPaymentData` to override the configured `WAVE_MONEY_MERCHANT_NAME` or `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS` for that one payment (the merchant name setting stays required).
+- `RedirectPayment` (`url`) from `$kbzPay->pwa($data)` and `$waveMoney->initiate($data)`. Wave fills `$data->merchantReferenceId` when empty; store it. Wave's `orderId` and `merchantReferenceId` may only hold letters, numbers, `_` and `-`. Pass `merchantName` or `timeToLiveSeconds` to `WaveMoneyPaymentData` to override the configured `WAVE_MONEY_MERCHANT_NAME` or `WAVE_MONEY_TIME_TO_LIVE_IN_SECONDS` for that one payment.
 - `FormPayment` from `$ayaPay->initiate($data)` and `$cyberSource->initiate($data)` (no network call): `echo $payment->toHtml()` for an auto-submitting page (`toHtml($nonce)` adds your Content-Security-Policy nonce to its inline script), or render `action`, `fields` and `enctype` yourself.
 - `QrPayment` from `$kbzPay->qr($data)` (encode `qrString`) and `$yomaMmqr->initiate($data)` (`qrImageDataUri()`, `expiresAt`, `reference`). A Yoma QR lives `YomaMmqr::QR_LIFETIME_SECONDS` (120); renew it with `$yomaMmqr->renewQr($orderId)`.
 - `AppPayment` from `$kbzPay->app($data)`: return `$payment->toArray()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.

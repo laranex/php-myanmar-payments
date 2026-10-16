@@ -65,11 +65,6 @@ final class Config
     }
 
     /**
-     * A whole number given as an integer or integer text, or null when it is missing or blank.
-     *
-     * @throws ConfigurationException When the value is set but not a whole number, naming `$requirement`.
-     */
-    /**
      * A required whole number, given as an integer or integer text such as `"30"`.
      *
      * @throws ConfigurationException When the value is missing or blank, or not a whole number.
@@ -79,6 +74,11 @@ final class Config
         return $this->optionalInteger($key, $requirement) ?? throw ConfigurationException::missing($this->gateway, $key);
     }
 
+    /**
+     * A whole number given as an integer or integer text, or null when it is missing or blank.
+     *
+     * @throws ConfigurationException When the value is set but not a whole number, naming `$requirement`.
+     */
     public function optionalInteger(string $key, string $requirement): ?int
     {
         $value = $this->config[$key] ?? null;
