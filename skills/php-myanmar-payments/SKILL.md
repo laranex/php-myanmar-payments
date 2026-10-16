@@ -65,7 +65,7 @@ header('Location: '.$payment->url);
 - `QrPayment` from `$kbzPay->qr($data)` (encode `qrString`) and `$yomaMmqr->initiate($data)` (`qrImageDataUri()`, `expiresAt`, `reference`). A Yoma QR lives `YomaMmqr::QR_LIFETIME_SECONDS` (120); renew it with `$yomaMmqr->renewQr($orderId)`.
 - `AppPayment` from `$kbzPay->app($data)`: return `$payment->toArray()` (`orderId`, `orderInfo`, `sign`, `signType`) to your mobile app.
 
-AYA needs a channel: `$ayaPay->services()` lists `AyaPayService` entries (`key`, `supports($method)`), then `$ayaPay->initiate(new AyaPayPaymentData('ORDER123', 1000, 'kbz_pay', AyaPayMethod::Qr))`.
+AYA needs a channel: `$ayaPay->services()` lists `AyaPayService` entries (`key`, `supports($method)`), then `$ayaPay->initiate(new AyaPayPaymentData('ORDER123', 1000, 'kbz_pay', AyaPayMethod::Qr))`. AYA's `orderId`, `description` and `userRefs` must not contain `:`.
 
 ### Handle the callback
 
@@ -97,6 +97,7 @@ $callback->acknowledgement->send(); // or copy its status, headers and body to y
 
 - `$kbzPay->status($orderId)`, `$ayaPay->status($orderId)` and `$yomaMmqr->status($reference)` return `PaymentStatusResult` with `status` and `isSuccessful()`. Wave Pay and CyberSource have no status API.
 - Statuses: `PaymentStatus::Successful`, `Pending`, `Failed`, `Canceled`, `Expired`, `Unknown`; `$status->isFinal()`.
+- Redirects are never followed: a 3xx response is a failure like any other non-2xx one.
 - Gateway failures throw `ApiException` (`gatewayCode`, `gatewayMessage`, `httpStatus`, `raw`; network errors are the previous exception). All errors extend `PaymentException`.
 
 ## Test your app
