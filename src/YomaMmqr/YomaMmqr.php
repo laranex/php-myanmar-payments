@@ -112,7 +112,8 @@ class YomaMmqr implements PaymentGateway
 
     /**
      * Generate a new QR for an order that is already checked out, e.g. after the previous one expired.
-     * The previous QR's reference stops working.
+     * The previous QR's reference stops working. `qrString` and `refLabel` are read as text (a boolean becomes
+     * `"true"` / `"false"`) and must not be empty.
      *
      * @throws ApiException
      */
@@ -123,15 +124,18 @@ class YomaMmqr implements PaymentGateway
             'orderNumber' => $orderId,
         ]);
 
-        if (! is_string($body['qrString'] ?? null) || $body['qrString'] === '' || ! is_scalar($body['refLabel'] ?? null) || (string) $body['refLabel'] === '') {
+        $qrString = Json::scalarString($body['qrString'] ?? null);
+        $refLabel = Json::scalarString($body['refLabel'] ?? null);
+
+        if ($qrString === '' || $refLabel === '') {
             throw new ApiException('Yoma MMQR did not return a QR.', raw: $body);
         }
 
         return new QrPayment(
             orderId: $orderId,
-            qrImage: $body['qrString'],
+            qrImage: $qrString,
             expiresAt: new DateTimeImmutable('+'.self::QR_LIFETIME_SECONDS.' seconds'),
-            reference: (string) $body['refLabel'],
+            reference: $refLabel,
             raw: $body,
         );
     }
@@ -228,7 +232,7 @@ class YomaMmqr implements PaymentGateway
         }
 
         $body = $response->json();
-        $errorCode = isset($body['errorCode']) ? (string) $body['errorCode'] : null;
+        $errorCode = self::nonEmpty($body['errorCode'] ?? null);
 
         if (! $response->successful() || ($errorCode !== null && ! in_array($errorCode, $allowErrors, true))) {
             $this->fail($path, $response, $body, $errorCode);
@@ -253,7 +257,7 @@ class YomaMmqr implements PaymentGateway
         $token = $body['access_token'] ?? null;
 
         if (! $response->successful() || ! is_string($token) || $token === '') {
-            $this->fail('token', $response, $body, isset($body['error']) ? (string) $body['error'] : null);
+            $this->fail('token', $response, $body, self::nonEmpty($body['error'] ?? null));
         }
 
         // The leading digits of `expires_in`, e.g. 28800 for `28800` or `"28800.0"`; anything else means one hour.
@@ -269,11 +273,21 @@ class YomaMmqr implements PaymentGateway
     }
 
     /**
+     * A response field as text, or null when it is missing, empty or not a scalar.
+     */
+    private static function nonEmpty(mixed $value): ?string
+    {
+        $text = Json::scalarString($value);
+
+        return $text !== '' ? $text : null;
+    }
+
+    /**
      * @param  array<array-key, mixed>  $body
      */
     private function fail(string $endpoint, HttpResponse $response, array $body, ?string $errorCode): never
     {
-        $message = isset($body['errorDescription']) ? (string) $body['errorDescription'] : (isset($body['error_description']) ? (string) $body['error_description'] : null);
+        $message = self::nonEmpty($body['errorDescription'] ?? null) ?? self::nonEmpty($body['error_description'] ?? null);
 
         throw new ApiException(
             "Yoma MMQR {$endpoint} failed".($errorCode !== null && $errorCode !== '' ? rtrim(": [{$errorCode}] {$message}") : " with HTTP {$response->status}."),

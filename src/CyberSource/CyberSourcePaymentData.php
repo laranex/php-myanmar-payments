@@ -18,6 +18,8 @@ final class CyberSourcePaymentData
      */
     public readonly Amount $amount;
 
+    private readonly bool $negativeAmount;
+
     /**
      * @param  string  $orderId  Your order id (`reference_number`), at most 50 characters. Echoed back as `req_reference_number`.
      * @param  Amount|int  $amount  Order total in `$currency`, e.g. `Amount::parse('10.50')`. Decimals allowed, at most 15 characters.
@@ -27,6 +29,8 @@ final class CyberSourcePaymentData
      * @param  string  $locale  Language of the hosted page, e.g. `en-us`.
      * @param  string|null  $returnUrl  Receipt page the customer is sent to (`override_custom_receipt_page`), at most 255 characters.
      * @param  string|null  $cancelUrl  Page the customer is sent to on cancel (`override_custom_cancel_page`), at most 255 characters.
+     *
+     * @throws InvalidPaymentDataException With every invalid field, a negative `$amount` included.
      */
     public function __construct(
         public readonly string $orderId,
@@ -38,7 +42,8 @@ final class CyberSourcePaymentData
         public readonly ?string $returnUrl = null,
         public readonly ?string $cancelUrl = null,
     ) {
-        $this->amount = Amount::from($amount);
+        $this->negativeAmount = is_int($amount) && $amount < 0;
+        $this->amount = $this->negativeAmount ? Amount::kyat(0) : Amount::from($amount);
 
         $this->validate();
     }
@@ -53,6 +58,7 @@ final class CyberSourcePaymentData
         (new Validator)
             ->required('orderId', $this->orderId)
             ->max('orderId', $this->orderId, 50)
+            ->negative('amount', $this->negativeAmount)
             ->amount('CyberSource', $this->amount, maxDecimals: null, allowZero: true, maxLength: 15)
             ->required('callbackUrl', $this->callbackUrl)
             ->url('callbackUrl', $this->callbackUrl)

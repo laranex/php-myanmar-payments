@@ -68,6 +68,9 @@ class AyaPay implements PaymentGateway
     /**
      * The payment channels enabled for your merchant account, and the methods each supports.
      *
+     * `data` and each service's `methods` are read only when they are JSON lists. A service without a `key` is
+     * skipped, and so are method entries that are not scalars.
+     *
      * @return list<AyaPayService>
      *
      * @throws ApiException
@@ -83,19 +86,21 @@ class AyaPay implements PaymentGateway
 
         $services = [];
 
-        foreach ((array) ($body['data'] ?? []) as $service) {
-            if (! is_array($service) || ! is_scalar($service['key'] ?? null) || (string) $service['key'] === '') {
+        foreach (self::list($body['data'] ?? null) as $service) {
+            $key = is_array($service) ? Json::scalar($service['key'] ?? null) ?? '' : '';
+
+            if (! is_array($service) || $key === '') {
                 continue;
             }
 
-            $methods = array_map(Json::scalarString(...), array_values(array_filter((array) ($service['methods'] ?? []), is_scalar(...))));
+            $methods = array_map(Json::scalarString(...), array_values(array_filter(self::list($service['methods'] ?? null), is_scalar(...))));
 
             $name = Json::scalarString($service['name'] ?? null);
 
             $services[] = new AyaPayService(
-                name: $name !== '' ? $name : (string) $service['key'],
-                key: (string) $service['key'],
-                imageUrl: isset($service['image_url']) ? (string) $service['image_url'] : null,
+                name: $name !== '' ? $name : $key,
+                key: $key,
+                imageUrl: Json::scalar($service['image_url'] ?? null),
                 methods: array_values(array_filter(array_map(fn (string $method): ?AyaPayMethod => AyaPayMethod::tryFrom($method), $methods))),
                 unknownMethods: array_values(array_filter($methods, fn (string $method): bool => AyaPayMethod::tryFrom($method) === null)),
             );
@@ -155,7 +160,7 @@ class AyaPay implements PaymentGateway
         ]));
 
         $payload = $this->verifiedPayload(is_array($body['data'] ?? null) ? $body['data'] : [], 'enquiry response');
-        $statusCode = trim((string) ($payload['statusCode'] ?? ''));
+        $statusCode = trim(Json::scalarString($payload['statusCode'] ?? null));
 
         $reportedOrderId = Json::scalarString($payload['merchOrderId'] ?? null);
 
@@ -163,8 +168,8 @@ class AyaPay implements PaymentGateway
             orderId: $reportedOrderId !== '' ? $reportedOrderId : $orderId,
             status: PaymentStatus::resolve(self::STATUSES, $statusCode),
             gatewayStatus: $statusCode,
-            gatewayReference: isset($payload['tranId']) ? (string) $payload['tranId'] : null,
-            amount: isset($payload['amount']) ? (string) $payload['amount'] : null,
+            gatewayReference: Json::scalar($payload['tranId'] ?? null),
+            amount: Json::scalar($payload['amount'] ?? null),
             raw: $payload,
         );
     }
@@ -195,14 +200,14 @@ class AyaPay implements PaymentGateway
      */
     private function toCallback(array $payload): PaymentCallback
     {
-        $statusCode = trim((string) ($payload['statusCode'] ?? ''));
+        $statusCode = trim(Json::scalarString($payload['statusCode'] ?? null));
 
         return new PaymentCallback(
-            orderId: (string) ($payload['merchOrderId'] ?? ''),
+            orderId: Json::scalarString($payload['merchOrderId'] ?? null),
             status: PaymentStatus::resolve(self::STATUSES, $statusCode),
             gatewayStatus: $statusCode,
-            gatewayReference: isset($payload['tranId']) ? (string) $payload['tranId'] : null,
-            amount: isset($payload['amount']) ? (string) $payload['amount'] : null,
+            gatewayReference: Json::scalar($payload['tranId'] ?? null),
+            amount: Json::scalar($payload['amount'] ?? null),
             raw: $payload,
         );
     }
@@ -241,14 +246,14 @@ class AyaPay implements PaymentGateway
     private static function wellFormed(array $payload): bool
     {
         foreach (AyaPaySigner::PAYLOAD_FIELDS as $field) {
-            $value = Json::scalarString($payload[$field] ?? null);
+            $value = Json::scalarString($payload[AyaPaySigner::payloadKey($field, $payload)] ?? null);
 
             if ($field === 'dateTime' ? $value !== '' && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\z/', $value) !== 1 : str_contains($value, ':')) {
                 return false;
             }
         }
 
-        $currency = Json::scalarString($payload[array_key_exists('currenyCode', $payload) ? 'currenyCode' : 'currencyCode'] ?? null);
+        $currency = Json::scalarString($payload[AyaPaySigner::payloadKey('currencyCode', $payload)] ?? null);
         $required = array_map(fn (string $field): string => Json::scalarString($payload[$field] ?? null), ['merchOrderId', 'tranId']);
 
         return ! in_array('', $required, true)
@@ -258,19 +263,29 @@ class AyaPay implements PaymentGateway
     }
 
     /**
+     * The value when it is a JSON list, otherwise an empty list.
+     *
+     * @return list<mixed>
+     */
+    private static function list(mixed $value): array
+    {
+        return is_array($value) && array_is_list($value) ? $value : [];
+    }
+
+    /**
      * @return array<array-key, mixed>
      */
     private function ensureSuccess(string $endpoint, HttpResponse $response): array
     {
         $body = $response->json();
-        $status = isset($body['status']) ? (string) $body['status'] : null;
+        $status = Json::scalar($body['status'] ?? null);
 
         if (! $response->successful() || $status !== '00') {
-            $message = isset($body['message']) ? (string) $body['message'] : null;
+            $message = Json::scalar($body['message'] ?? null);
 
             throw new ApiException(
                 "AYA Pay {$endpoint} failed".($status !== null && $status !== '' ? rtrim(": [{$status}] {$message}") : " with HTTP {$response->status}."),
-                gatewayCode: $status,
+                gatewayCode: $status !== '' ? $status : null,
                 gatewayMessage: $message,
                 httpStatus: $response->status,
                 raw: $body,

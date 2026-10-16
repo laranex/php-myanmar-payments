@@ -28,7 +28,8 @@ final class CallbackRequest
     ) {}
 
     /**
-     * Build from PHP's superglobals, for plain PHP endpoints.
+     * Build from PHP's superglobals, for plain PHP endpoints. The query string is read from `QUERY_STRING` like a
+     * urlencoded body: names are kept exactly as sent and the first value of a repeated name wins.
      */
     public static function fromGlobals(): self
     {
@@ -42,11 +43,12 @@ final class CallbackRequest
             }
         }
 
-        return new self((string) file_get_contents('php://input'), $headers, $_GET);
+        return new self((string) file_get_contents('php://input'), $headers, Form::decode(is_string($_SERVER['QUERY_STRING'] ?? null) ? $_SERVER['QUERY_STRING'] : ''));
     }
 
     /**
-     * Build from a PSR-7 server request.
+     * Build from a PSR-7 server request. The query string is read from the request URI like a urlencoded body: names
+     * are kept exactly as sent and the first value of a repeated name wins. Repeated headers are joined with ", ".
      */
     public static function fromPsr7(ServerRequestInterface $request): self
     {
@@ -56,7 +58,7 @@ final class CallbackRequest
             $headers[$name] = implode(', ', $values);
         }
 
-        return new self((string) $request->getBody(), $headers, $request->getQueryParams());
+        return new self((string) $request->getBody(), $headers, Form::decode($request->getUri()->getQuery()));
     }
 
     /**
@@ -111,7 +113,8 @@ final class CallbackRequest
 
     /**
      * The body decoded as a JSON object or as a urlencoded form. JSON numbers keep their exact text, as
-     * strings. In a form, the first value of a repeated name wins and names are kept exactly as sent.
+     * strings. In a form, the first value of a repeated name wins and names are kept exactly as sent. Only ASCII
+     * whitespace and NUL around the body are trimmed, so a byte order mark is not whitespace.
      *
      * @return array<array-key, mixed>
      */

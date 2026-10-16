@@ -9,7 +9,7 @@ it('builds from a PSR-7 server request with its body, headers and query string',
     $psr = (new ServerRequest('POST', 'https://shop.test/callback?orderId=ORDER_1', [
         'Content-Type' => 'application/json',
         'X-Signature' => ['abc', 'def'],
-    ], '{"status":"PAID"}'))->withQueryParams(['orderId' => 'ORDER_1']);
+    ], '{"status":"PAID"}'))->withQueryParams(['orderId' => 'parsed by the framework']);
 
     $request = CallbackRequest::fromPsr7($psr);
 
@@ -25,7 +25,8 @@ it('builds from the superglobals of a plain PHP endpoint', function () {
     $_SERVER['HTTP_X_SIGNATURE'] = 'sig';
     $_SERVER['CONTENT_TYPE'] = 'application/x-www-form-urlencoded';
     $_SERVER['CONTENT_LENGTH'] = '0';
-    $_GET = ['merchant_order_id' => 'ORDER_1'];
+    $_SERVER['QUERY_STRING'] = 'merchant_order_id=ORDER_1';
+    $_GET = ['merchant_order_id' => 'parsed by PHP'];
 
     try {
         $request = CallbackRequest::fromGlobals();
@@ -40,6 +41,40 @@ it('builds from the superglobals of a plain PHP endpoint', function () {
         ->and($request->header('Content-Length'))->toBe('0')
         ->and($request->query)->toBe(['merchant_order_id' => 'ORDER_1'])
         ->and($request->input())->toBe(['merchant_order_id' => 'ORDER_1']);
+});
+
+it('reads the query string like a urlencoded body: exact names, first value wins, bad escapes kept', function () {
+    $query = 'a.b=1&a.b=2&c%5B%5D=x&d+e=%zz&plus=a+b&tilde=~&&empty=';
+    $psr = new ServerRequest('GET', "https://shop.test/return?{$query}");
+    $server = $_SERVER;
+    $_SERVER['QUERY_STRING'] = $query;
+
+    try {
+        $globals = CallbackRequest::fromGlobals();
+    } finally {
+        $_SERVER = $server;
+    }
+
+    $expected = ['a.b' => '1', 'c[]' => 'x', 'd e' => '%zz', 'plus' => 'a b', 'tilde' => '~', 'empty' => ''];
+
+    expect(CallbackRequest::fromPsr7($psr)->query)->toBe($expected)
+        ->and($globals->query)->toBe($expected);
+});
+
+it('reads no query when the server has no query string', function () {
+    $server = $_SERVER;
+    unset($_SERVER['QUERY_STRING']);
+
+    try {
+        expect(CallbackRequest::fromGlobals()->query)->toBe([]);
+    } finally {
+        $_SERVER = $server;
+    }
+});
+
+it('trims only ASCII whitespace around the body, so a byte order mark makes JSON a form', function () {
+    expect((new CallbackRequest(" \t\n{\"a\":1}\r\n\x0B\0"))->parsedBody())->toBe(['a' => '1'])
+        ->and((new CallbackRequest("\u{FEFF}{\"a\":1}"))->parsedBody())->toBe(["\u{FEFF}{\"a\":1}" => '']);
 });
 
 it('matches header names case-insensitively and returns null for a missing header', function () {

@@ -79,6 +79,14 @@ final class Validator
         return $this;
     }
 
+    /**
+     * A negative whole-number amount, kept by the payment data so it is reported with the other errors.
+     */
+    public function negative(string $field, bool $negative): self
+    {
+        return $this->when($negative, $field, "The {$field} field must not be negative.");
+    }
+
     public function between(string $field, ?int $value, int $min, int $max): self
     {
         if ($value !== null && ($value < $min || $value > $max)) {

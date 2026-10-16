@@ -56,6 +56,16 @@ final class AyaPaySigner
     }
 
     /**
+     * The key a payload field is signed under: AYA spells `currencyCode` as `currenyCode`, which wins when present.
+     *
+     * @param  array<array-key, mixed>  $payload
+     */
+    public static function payloadKey(string $field, array $payload): string
+    {
+        return $field === 'currencyCode' && array_key_exists('currenyCode', $payload) ? 'currenyCode' : $field;
+    }
+
+    /**
      * Decode a `payload` + `checkSum` pair and return the payload if the checksum matches.
      *
      * @return array<string, mixed>|null
@@ -72,7 +82,7 @@ final class AyaPaySigner
         $values = [];
 
         foreach (self::PAYLOAD_FIELDS as $field) {
-            $key = $field === 'currencyCode' && array_key_exists('currenyCode', $decoded) ? 'currenyCode' : $field;
+            $key = self::payloadKey($field, $decoded);
 
             if (! array_key_exists($key, $decoded)) {
                 continue;

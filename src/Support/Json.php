@@ -41,6 +41,15 @@ final class Json
     }
 
     /**
+     * A field read from a gateway response or callback: a scalar as `scalarString()` gives it (so `true` is
+     * `"true"` and a number keeps its exact text), and null for a missing, null, object or list value.
+     */
+    public static function scalar(mixed $value): ?string
+    {
+        return is_scalar($value) ? self::scalarString($value) : null;
+    }
+
+    /**
      * Whether the value is an object or a list, which no gateway signs.
      */
     public static function isNested(mixed $value): bool

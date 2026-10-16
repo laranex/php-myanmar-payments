@@ -6,6 +6,7 @@ namespace Laranex\PhpMyanmarPayments\KbzPay;
 
 use Laranex\PhpMyanmarPayments\Amount;
 use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
+use Laranex\PhpMyanmarPayments\Support\Form;
 use Laranex\PhpMyanmarPayments\Support\Validator;
 
 /**
@@ -18,13 +19,17 @@ final class KbzPayPaymentData
      */
     public readonly Amount $amount;
 
+    private readonly bool $negativeAmount;
+
     /**
      * @param  string  $orderId  Your unique order id (`merch_order_id`). Letters, digits and `_` only, at most 40.
      * @param  Amount|int  $amount  Amount in kyat, e.g. `Amount::kyat(1000)` or `Amount::parse('1000.50')`. Up to 2 decimal places.
      * @param  string  $callbackUrl  Public URL KBZ posts the payment result to (`notify_url`). No query string.
      * @param  string|null  $title  Product name shown to the customer.
      * @param  int|null  $timeToLiveMinutes  Minutes the customer has to pay before the order expires, 1 to 120. Overrides `KbzPayConfig::$timeToLiveMinutes` for this payment.
-     * @param  string|null  $callbackInfo  Free text KBZ sends back unchanged in the callback.
+     * @param  string|null  $callbackInfo  Free text KBZ sends back unchanged in the callback. Sent URL-encoded (`~` stays as it is); the encoded text may be at most 512 characters.
+     *
+     * @throws InvalidPaymentDataException With every invalid field, a negative `$amount` included.
      */
     public function __construct(
         public readonly string $orderId,
@@ -34,7 +39,8 @@ final class KbzPayPaymentData
         public readonly ?int $timeToLiveMinutes = null,
         public readonly ?string $callbackInfo = null,
     ) {
-        $this->amount = Amount::from($amount);
+        $this->negativeAmount = is_int($amount) && $amount < 0;
+        $this->amount = $this->negativeAmount ? Amount::kyat(0) : Amount::from($amount);
 
         $this->validate();
     }
@@ -50,13 +56,14 @@ final class KbzPayPaymentData
             ->required('orderId', $this->orderId)
             ->max('orderId', $this->orderId, 40)
             ->pattern('orderId', $this->orderId, '/^[A-Za-z0-9_]+\z/', 'letters, numbers and underscores')
+            ->negative('amount', $this->negativeAmount)
             ->amount('KBZ Pay', $this->amount, maxDecimals: 2)
             ->required('callbackUrl', $this->callbackUrl)
             ->url('callbackUrl', $this->callbackUrl)
             ->max('callbackUrl', $this->callbackUrl, 512)
             ->when(str_contains($this->callbackUrl, '?'), 'callbackUrl', 'The callbackUrl field must not contain a query string.')
             ->between('timeToLiveMinutes', $this->timeToLiveMinutes, 1, 120)
-            ->max('callbackInfo', $this->callbackInfo === null ? null : urlencode($this->callbackInfo), 512)
+            ->max('callbackInfo', $this->callbackInfo === null ? null : Form::escape($this->callbackInfo), 512)
             ->validate();
     }
 }

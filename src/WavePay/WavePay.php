@@ -13,8 +13,10 @@ use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 use Laranex\PhpMyanmarPayments\Http\Transport;
 use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
 use Laranex\PhpMyanmarPayments\Results\RedirectPayment;
+use Laranex\PhpMyanmarPayments\Support\Form;
 use Laranex\PhpMyanmarPayments\Support\Json;
 use Psr\Http\Client\ClientInterface;
+use stdClass;
 
 /**
  * Wave Pay (Pay with Wave API v1.3): redirect payments and callbacks. Wave has no status API, so the callback is
@@ -83,7 +85,7 @@ class WavePay implements PaymentGateway
             'merchant_reference_id' => $data->merchantReferenceId,
             'frontend_result_url' => $data->returnUrl,
             'backend_result_url' => $data->callbackUrl,
-            'amount' => (int) $amount,
+            'amount' => $amount,
             'time_to_live_in_seconds' => $timeToLiveSeconds,
             'payment_description' => $data->description,
             'currency' => self::CURRENCY,
@@ -96,7 +98,7 @@ class WavePay implements PaymentGateway
                 $data->merchantReferenceId,
             ),
             'merchant_name' => $data->merchantName ?? $this->config->merchantName,
-            'items' => (string) json_encode(array_map(fn (WavePayItem $item): array => $item->toArray(), $data->items), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            'items' => '['.implode(',', array_map(fn (WavePayItem $item): string => $item->toJson(), $data->items)).']',
         ];
 
         foreach (['additional_field_3' => $data->additionalField3, 'additional_field_4' => $data->additionalField4, 'additional_field_5' => $data->additionalField5] as $field => $value) {
@@ -105,17 +107,17 @@ class WavePay implements PaymentGateway
             }
         }
 
-        $response = $this->transport->postJson("{$this->config->baseUrl}/payment", $payload);
+        $response = $this->transport->postJsonText("{$this->config->baseUrl}/payment", self::encode($payload, ['amount', 'time_to_live_in_seconds']));
 
         $body = $response->json();
-        $transactionId = $body['transaction_id'] ?? null;
+        $transactionId = Json::scalar($body['transaction_id'] ?? null) ?? '';
 
-        if (! $response->successful() || ($body['message'] ?? null) !== 'success' || ! is_string($transactionId) || $transactionId === '') {
-            $message = $this->errorMessage($body);
+        if (! $response->successful() || ($body['message'] ?? null) !== 'success' || $transactionId === '') {
+            $message = $this->errorMessage($body, json_decode($response->body));
 
             throw new ApiException(
                 "Wave Pay payment request failed with HTTP {$response->status}: {$message}",
-                gatewayCode: isset($body['errors']) ? 'VALIDATION_ERROR' : (isset($body['message']) ? (string) $body['message'] : null),
+                gatewayCode: array_key_exists('errors', $body) ? 'VALIDATION_ERROR' : Json::scalar($body['message'] ?? null),
                 gatewayMessage: $message,
                 httpStatus: $response->status,
                 raw: $body,
@@ -124,7 +126,7 @@ class WavePay implements PaymentGateway
 
         return new RedirectPayment(
             orderId: $data->orderId,
-            url: "{$this->config->baseRedirectUrl}/authenticate?transaction_id=".urlencode($transactionId),
+            url: "{$this->config->baseRedirectUrl}/authenticate?transaction_id=".Form::escape($transactionId),
             gatewayReference: $transactionId,
             raw: $body,
         );
@@ -152,14 +154,14 @@ class WavePay implements PaymentGateway
             throw new SignatureVerificationException('Wave Pay callback is malformed.', $payload);
         }
 
-        $gatewayStatus = trim((string) ($payload['status'] ?? ''));
+        $gatewayStatus = trim(Json::scalarString($payload['status'] ?? null));
 
         return new PaymentCallback(
             orderId: $this->orderId($payload),
             status: PaymentStatus::resolve(self::STATUSES, $gatewayStatus),
             gatewayStatus: $gatewayStatus,
-            gatewayReference: isset($payload['transactionId']) ? (string) $payload['transactionId'] : null,
-            amount: isset($payload['amount']) ? (string) $payload['amount'] : null,
+            gatewayReference: Json::scalar($payload['transactionId'] ?? null),
+            amount: Json::scalar($payload['amount'] ?? null),
             raw: $payload,
         );
     }
@@ -189,24 +191,29 @@ class WavePay implements PaymentGateway
      */
     private function orderId(array $payload): string
     {
-        $orderId = (string) ($payload['orderId'] ?? '');
+        $orderId = Json::scalarString($payload['orderId'] ?? null);
 
-        return $orderId !== '' ? $orderId : (string) ($payload['merchantReferenceId'] ?? '');
+        return $orderId !== '' ? $orderId : Json::scalarString($payload['merchantReferenceId'] ?? null);
     }
 
     /**
+     * Wave's `errors` object as `field: message` pairs sorted by field, or `message`. Only a JSON object counts as
+     * field errors; each entry is a list of messages or a single one, and objects inside are skipped.
+     *
      * @param  array<array-key, mixed>  $body
      */
-    private function errorMessage(array $body): string
+    private function errorMessage(array $body, mixed $decoded): string
     {
-        if (is_array($body['errors'] ?? null)) {
+        if ($decoded instanceof stdClass && ($decoded->errors ?? null) instanceof stdClass && is_array($body['errors'] ?? null)) {
             $errors = $body['errors'];
             $fields = array_map('strval', array_keys($errors));
             sort($fields, SORT_STRING);
             $messages = [];
 
             foreach ($fields as $field) {
-                $texts = array_map(Json::scalarString(...), array_filter((array) $errors[$field], is_scalar(...)));
+                $entry = $errors[$field];
+                $list = is_array($entry) && array_is_list($entry) ? $entry : [$entry];
+                $texts = array_map(Json::scalarString(...), array_filter($list, is_scalar(...)));
                 $messages[] = $field.': '.implode(' ', $texts);
             }
 
@@ -216,5 +223,23 @@ class WavePay implements PaymentGateway
         $message = Json::scalarString($body['message'] ?? null);
 
         return $message !== '' ? $message : 'unexpected response';
+    }
+
+    /**
+     * Write the request as JSON. The `$numbers` members are written as JSON numbers with their exact digits, so an
+     * amount above PHP's integer limit is sent as given.
+     *
+     * @param  array<string, int|string>  $payload
+     * @param  list<string>  $numbers
+     */
+    private static function encode(array $payload, array $numbers): string
+    {
+        $members = [];
+
+        foreach ($payload as $name => $value) {
+            $members[] = json_encode($name).':'.(in_array($name, $numbers, true) ? (string) $value : json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+        }
+
+        return '{'.implode(',', $members).'}';
     }
 }

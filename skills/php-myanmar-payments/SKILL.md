@@ -36,13 +36,13 @@ $kbzPay = $payments->kbzPay(); // also wavePay(), ayaPay(), yomaMmqr(), cyberSou
 - Or pass the settings directly: gateways and `new MyanmarPayments([...])` take config objects or snake_case arrays (`['kbz_pay' => ['app_id' => '...', 'app_key' => '...', 'merchant_code' => '...', 'api_url' => '...', 'pwa_url' => '...', 'time_to_live_in_minutes' => 15]]`; add `timeout_in_seconds` to change the 30-second timeout).
 - Options: a PSR-18 client (second argument of `KbzPay`, `WavePay`, `AyaPay`, `YomaMmqr` and `MyanmarPayments`; without one, Guzzle gets the configured `timeoutSeconds`, 30 by default; a client you pass keeps its own timeout). Yoma and the facade also take a PSR-16 cache for the access token.
 - Yoma MMQR needs a shared PSR-16 cache in production (`new YomaMmqr($config, $client, $cache)` or `MyanmarPayments::fromEnv(cache: $cache)`). The default in-memory `ArrayCache` dies with the PHP process, so a PHP-FPM app without one fetches a new access token on every request.
-- A missing setting throws `ConfigurationException` (`gateway`, `key`); so does an invalid time setting (a whole number greater than 0; `KBZ_PAY_TIME_TO_LIVE_IN_MINUTES` from 1 to 120).
+- A missing setting throws `ConfigurationException` (`gateway`, `key`); so does an invalid time setting (a whole number from 1 to 2147483647; `KBZ_PAY_TIME_TO_LIVE_IN_MINUTES` from 1 to 120). Array settings may be strings or integers (`'merchant_code' => 200123`); floats and booleans count as missing.
 
 ## Use
 
 ### Amounts
 
-Amounts are `Amount::kyat(1000)`, `Amount::parse('1000.50')` or a whole `int`; never a float. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data throws `InvalidPaymentDataException` with `errors()` per field, before any request is sent. Compare a gateway's amount by value with `$amount->equals($callback->amount)`.
+Amounts are `Amount::kyat(1000)`, `Amount::parse('1000.50')` or a whole `int`; never a float. Only KBZ Pay (up to 2 decimals) and CyberSource accept decimals; Wave, AYA and Yoma take whole kyat. Invalid data throws `InvalidPaymentDataException` with `errors()` per field (a negative amount included), before any request is sent. Compare a gateway's amount by value with `$amount->equals($callback->amount)`.
 
 ### Start a payment
 
@@ -87,7 +87,8 @@ if ($callback->isSuccessful()) {
 $callback->acknowledgement->send(); // or copy its status, headers and body to your response
 ```
 
-- Give the package the raw body: `fromGlobals()` reads `php://input` and `fromPsr7()` the PSR-7 body; disable CSRF protection for callback routes.
+- Give the package the raw body: `fromGlobals()` reads `php://input` and `fromPsr7()` the PSR-7 body (both read the raw query string); disable CSRF protection for callback routes.
+- `SignatureVerificationException` covers both a bad signature (`... verification failed.`) and a signed callback with malformed values (`... is malformed.`); answer both with a 400.
 - Check AYA's browser return with `$ayaPay->verifyRedirect($request)`.
 - Yoma MMQR callbacks sign only `orderNumber` and `status` and carry no amount (`$callback->amount` is null): match `orderNumber` to your stored order (its QR was generated for the stored amount) and, to confirm, call `$yomaMmqr->status($reference)` with that order's QR reference (`refLabel`). The status result has no amount either, so trust your stored amount.
 - For production, store the verified callback, acknowledge immediately, then process it once in the background.

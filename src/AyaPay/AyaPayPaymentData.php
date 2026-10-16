@@ -18,6 +18,8 @@ final class AyaPayPaymentData
      */
     public readonly Amount $amount;
 
+    private readonly bool $negativeAmount;
+
     /**
      * AYA joins the signed values with ":", so `orderId`, `description` and `userRefs` must not contain ":".
      *
@@ -28,6 +30,8 @@ final class AyaPayPaymentData
      * @param  string|null  $returnUrl  Where AYA sends the customer afterwards. Defaults to the URL registered with AYA.
      * @param  string|null  $description  Shown to the customer.
      * @param  list<string>  $userRefs  Up to five of your own reference values, echoed back in the callback.
+     *
+     * @throws InvalidPaymentDataException With every invalid field, a negative `$amount` included.
      */
     public function __construct(
         public readonly string $orderId,
@@ -38,7 +42,8 @@ final class AyaPayPaymentData
         public readonly ?string $description = null,
         public readonly array $userRefs = [],
     ) {
-        $this->amount = Amount::from($amount);
+        $this->negativeAmount = is_int($amount) && $amount < 0;
+        $this->amount = $this->negativeAmount ? Amount::kyat(0) : Amount::from($amount);
 
         $this->validate();
     }
@@ -53,11 +58,12 @@ final class AyaPayPaymentData
         (new Validator)
             ->required('orderId', $this->orderId)
             ->length('orderId', $this->orderId, 6, 40)
+            ->negative('amount', $this->negativeAmount)
             ->amount('AYA Payment Gateway', $this->amount, maxDecimals: 0)
             ->required('channel', $this->channel)
             ->url('returnUrl', $this->returnUrl)
-            ->when(count($this->userRefs) > 5, 'userRefs', 'The userRefs field must not have more than 5 items.')
             ->when(! array_is_list($this->userRefs) || array_filter($this->userRefs, fn (mixed $ref): bool => ! is_string($ref)) !== [], 'userRefs', 'The userRefs field must be a list of strings.')
+            ->when(count($this->userRefs) > 5, 'userRefs', 'The userRefs field must not have more than 5 items.')
             ->when(str_contains($this->orderId, ':'), 'orderId', 'The orderId field must not contain ":".')
             ->when(str_contains((string) $this->description, ':'), 'description', 'The description field must not contain ":".')
             ->when(array_filter($this->userRefs, fn (mixed $ref): bool => is_string($ref) && str_contains($ref, ':')) !== [], 'userRefs', 'The userRefs field must not contain ":".')

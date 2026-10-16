@@ -2,14 +2,19 @@
 
 declare(strict_types=1);
 
+use GuzzleHttp\Psr7\Response;
 use Laranex\PhpMyanmarPayments\Amount;
 use Laranex\PhpMyanmarPayments\AyaPay\AyaPay;
 use Laranex\PhpMyanmarPayments\AyaPay\AyaPayConfig;
 use Laranex\PhpMyanmarPayments\AyaPay\AyaPayMethod;
 use Laranex\PhpMyanmarPayments\AyaPay\AyaPayPaymentData;
+use Laranex\PhpMyanmarPayments\AyaPay\AyaPayService;
 use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSource;
 use Laranex\PhpMyanmarPayments\CyberSource\CyberSourceConfig;
+use Laranex\PhpMyanmarPayments\CyberSource\CyberSourcePaymentData;
+use Laranex\PhpMyanmarPayments\CyberSource\CyberSourceTransactionType;
+use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
@@ -18,13 +23,16 @@ use Laranex\PhpMyanmarPayments\KbzPay\KbzPay;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPayConfig;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPayPaymentData;
 use Laranex\PhpMyanmarPayments\Results\FormPayment;
+use Laranex\PhpMyanmarPayments\Results\QrPayment;
 use Laranex\PhpMyanmarPayments\Support\ArrayCache;
+use Laranex\PhpMyanmarPayments\Support\Validator;
 use Laranex\PhpMyanmarPayments\WavePay\WavePay;
 use Laranex\PhpMyanmarPayments\WavePay\WavePayConfig;
 use Laranex\PhpMyanmarPayments\WavePay\WavePayItem;
 use Laranex\PhpMyanmarPayments\WavePay\WavePayPaymentData;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqr;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrConfig;
+use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrPaymentData;
 
 /*
  * tests/Fixtures/parity/vectors.json is shared byte for byte with go-, node- and python-myanmar-payments:
@@ -73,7 +81,8 @@ it('verifies every shared callback vector', function (string $gateway, array $ca
     $expected = $case['expected'];
 
     if (! $expected['valid']) {
-        expect(fn () => parityGateway($gateway)->handleCallback($request))->toThrow(SignatureVerificationException::class);
+        expect(fn () => parityGateway($gateway)->handleCallback($request))
+            ->toThrow(fn (SignatureVerificationException $e) => expect($e->getMessage())->toBe($expected['message']));
 
         return;
     }
@@ -344,5 +353,253 @@ it('takes KBZ Pay\'s time to live from the payment over the configuration like e
 
         expect(requestJson($http->getLastRequest())['Request']['biz_content']['timeout_express'] ?? null)->toBe($case['timeout_express'], (string) json_encode($case))
             ->and($payment->expiresAt)->not->toBeNull();
+    }
+});
+
+/**
+ * The errors a payment data constructor throws, in the order they were found.
+ *
+ * @return array<string, string>
+ */
+function parityErrors(Closure $build): array
+{
+    try {
+        $build();
+    } catch (InvalidPaymentDataException $e) {
+        return $e->errors();
+    }
+
+    return [];
+}
+
+/**
+ * @param  array<string, mixed>  $error
+ */
+function parityApiError(Closure $call, array $error, string $name): void
+{
+    try {
+        $call();
+        test()->fail("Expected an ApiException for {$name}");
+    } catch (ApiException $e) {
+        expect([$e->getMessage(), $e->gatewayCode, $e->gatewayMessage])->toBe([$error['message'], $error['gateway_code'], $error['gateway_message']], $name);
+    }
+}
+
+it('validates URLs like every other SDK', function () {
+    $vector = parity()['url_validation'];
+
+    foreach ($vector['cases'] as $case) {
+        $errors = parityErrors(fn () => (new Validator)->url($vector['field'], $case['url'])->validate());
+
+        expect($errors)->toBe($case['valid'] ? [] : [$vector['field'] => $vector['message']], (string) json_encode($case['url']));
+    }
+});
+
+it('escapes query values like every other SDK', function () {
+    foreach (parity()['query_escape']['cases'] as $case) {
+        $kbz = mockHttp(jsonResponse(['Response' => ['result' => 'SUCCESS', 'code' => '0', 'prepay_id' => 'P1', 'qrCode' => 'qr']]));
+        (new KbzPay(KbzPayConfig::fromEnv(parity()['config']['env']), $kbz))->qr(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', callbackInfo: $case['input']));
+
+        $wave = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => $case['input']]));
+        $payment = (new WavePay(WavePayConfig::fromEnv(parity()['config']['env']), $wave))->initiate(parityWavePayData(parity()['wave_pay_limits']['data']));
+
+        expect(requestJson($kbz->getLastRequest())['Request']['biz_content']['callback_info'])->toBe($case['escaped'])
+            ->and($payment->url)->toEndWith('/authenticate?transaction_id='.$case['escaped']);
+    }
+});
+
+it('trims only ASCII whitespace like every other SDK', function () {
+    $vector = parity()['ascii_trim'];
+
+    foreach ($vector['env'] as $case) {
+        $env = ['KBZ_PAY_APP_ID' => $case['value']] + parity()['config']['env'];
+
+        if ($case['app_id'] === null) {
+            expect(fn () => KbzPayConfig::fromEnv($env))->toThrow(ConfigurationException::class, $case['message']);
+        } else {
+            expect(KbzPayConfig::fromEnv($env)->appId)->toBe($case['app_id']);
+        }
+    }
+
+    foreach ($vector['kbz_pay_order_id'] as $case) {
+        expect(parityErrors(fn () => new KbzPayPaymentData($case['order_id'], 1000, 'https://shop.test/cb')))->toBe($case['errors']);
+    }
+});
+
+it('accepts integer string settings like every other SDK', function () {
+    $vector = parity()['config_setting_types'];
+
+    foreach ($vector['cases'] as $case) {
+        $config = [$vector['key'] => $case['value']] + $vector['config'];
+
+        if ($case['result'] === null) {
+            expect(fn () => CyberSourceConfig::fromArray($config))->toThrow(ConfigurationException::class, $vector['message']);
+        } else {
+            expect(CyberSourceConfig::fromArray($config)->profileId)->toBe($case['result']);
+        }
+    }
+});
+
+it('caps whole-number settings at 2147483647 like every other SDK', function () {
+    foreach (parity()['config_integer_limits']['cases'] as $case) {
+        $env = [$case['variable'] => $case['value']] + parity()['config']['env'];
+
+        if (isset($case['seconds'])) {
+            $config = parityConfig($case['gateway'], $env);
+            $seconds = $case['variable'] === 'WAVE_PAY_TIME_TO_LIVE_IN_SECONDS' && $config instanceof WavePayConfig ? $config->timeToLiveSeconds : ($config instanceof KbzPayConfig ? $config->timeoutSeconds : null);
+
+            expect($seconds)->toBe($case['seconds'], (string) json_encode($case));
+
+            continue;
+        }
+
+        expect(fn () => parityConfig($case['gateway'], $env))
+            ->toThrow(fn (ConfigurationException $e) => expect([$e->gateway, $e->key, $e->getMessage()])->toBe([$case['gateway'], $case['key'], $case['message']]));
+    }
+});
+
+it('reports the first configuration error in the same order as every other SDK', function () {
+    foreach (parity()['config_validation_order']['cases'] as $case) {
+        $env = parity()['config']['env'];
+
+        foreach ($case['env'] as $variable => $value) {
+            if ($value === null) {
+                unset($env[$variable]);
+            } else {
+                $env[$variable] = $value;
+            }
+        }
+
+        expect(fn () => parityConfig($case['gateway'], $env))
+            ->toThrow(fn (ConfigurationException $e) => expect([$e->key, $e->getMessage()])->toBe([$case['key'], $case['message']]));
+    }
+});
+
+it('collects negative amounts with the other errors like every other SDK', function () {
+    foreach (parity()['negative_amounts']['cases'] as $case) {
+        $data = $case['data'];
+
+        $build = match ($case['gateway']) {
+            'kbz_pay' => fn () => new KbzPayPaymentData($data['order_id'], $data['amount'], $data['callback_url']),
+            'wave_pay' => fn () => parityWavePayData($data, array_key_exists('amount', $data) ? ['amount' => $data['amount']] : []),
+            'aya_pay' => fn () => new AyaPayPaymentData($data['order_id'], $data['amount'], $data['channel'], AyaPayMethod::from($data['method'])),
+            'yoma_mmqr' => fn () => new YomaMmqrPaymentData($data['order_id'], $data['amount'], $data['description']),
+            'cyber_source' => fn () => new CyberSourcePaymentData($data['order_id'], $data['amount'], $data['callback_url'], $data['currency'], CyberSourceTransactionType::from($data['transaction_type']), $data['locale']),
+        };
+
+        expect(parityErrors($build))->toBe($case['errors'], (string) json_encode($case));
+    }
+});
+
+function parityAmount(int|string|null $amount): Amount|int|null
+{
+    return is_string($amount) ? Amount::parse($amount) : $amount;
+}
+
+it('validates Wave Pay payments in the same order as every other SDK', function () {
+    $vector = parity()['wave_pay_validation'];
+
+    foreach ($vector['cases'] as $case) {
+        $data = $case['data'] + $vector['data'];
+        $data['items'] = array_map(fn (array $item): array => [$item[0], parityAmount($item[1])], $data['items']);
+        $overrides = array_filter([
+            'amount' => parityAmount($data['amount'] ?? null),
+            'merchantName' => $data['merchant_name'] ?? null,
+            'timeToLiveSeconds' => $data['time_to_live_in_seconds'] ?? null,
+        ], fn (mixed $value): bool => $value !== null);
+
+        expect(parityErrors(fn () => parityWavePayData($data, $overrides)))->toBe($case['errors'], $case['name']);
+    }
+});
+
+it('sends exact Wave Pay amounts like every other SDK', function () {
+    $vector = parity()['wave_pay_exact_amount'];
+    $http = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => 'T1']));
+    $data = $vector['data'];
+    $data['items'] = array_map(fn (array $item): array => [$item[0], Amount::parse($item[1])], $data['items']);
+
+    (new WavePay(WavePayConfig::fromArray($vector['config']), $http))->initiate(parityWavePayData($data));
+
+    $body = (string) $http->getLastRequest()->getBody();
+    $json = json_decode($body, true, flags: JSON_BIGINT_AS_STRING);
+
+    expect($body)->toContain('"amount":'.$vector['expected']['amount_json'].',')
+        ->and($json['items'])->toBe($vector['expected']['items'])
+        ->and($json['hash'])->toBe($vector['expected']['hash']);
+});
+
+it('reports Wave Pay request failures like every other SDK', function () {
+    foreach (parity()['wave_pay_errors']['cases'] as $case) {
+        $http = mockHttp(new Response($case['status'], ['Content-Type' => 'application/json'], $case['body']));
+        $gateway = new WavePay(WavePayConfig::fromArray(parity()['wave_pay_request']['config']), $http);
+
+        parityApiError(fn () => $gateway->initiate(parityWavePayData(parity()['wave_pay_limits']['data'])), [
+            'message' => "Wave Pay payment request failed with HTTP {$case['status']}: {$case['gateway_message']}",
+            'gateway_code' => $case['gateway_code'],
+            'gateway_message' => $case['gateway_message'],
+        ], $case['body']);
+    }
+});
+
+it('reads AYA Pay services like every other SDK', function () {
+    foreach (parity()['aya_pay_services']['cases'] as $case) {
+        $http = mockHttp(new Response($case['status'] ?? 200, ['Content-Type' => 'application/json'], $case['body']));
+        $gateway = new AyaPay(AyaPayConfig::fromEnv(parity()['config']['env']), $http);
+
+        if (isset($case['error'])) {
+            parityApiError(fn () => $gateway->services(), $case['error'], $case['name']);
+
+            continue;
+        }
+
+        expect(array_map(fn (AyaPayService $service): array => [
+            'name' => $service->name,
+            'key' => $service->key,
+            'image_url' => $service->imageUrl,
+            'methods' => array_map(fn (AyaPayMethod $method): string => $method->value, $service->methods),
+            'unknown_methods' => $service->unknownMethods,
+        ], $gateway->services()))->toBe($case['services'], $case['name']);
+    }
+});
+
+it('reads Yoma MMQR responses like every other SDK', function () {
+    foreach (parity()['yoma_mmqr_responses']['cases'] as $case) {
+        $http = mockHttp(...array_map(fn (array $response): Response => new Response($response['status'], ['Content-Type' => 'application/json'], $response['body']), $case['responses']));
+        $gateway = new YomaMmqr(YomaMmqrConfig::fromEnv(parity()['config']['env']), $http);
+        $call = fn () => $case['call'] === 'status' ? $gateway->status($case['argument']) : $gateway->renewQr($case['argument']);
+
+        if (isset($case['error'])) {
+            parityApiError($call, $case['error'], $case['name']);
+
+            continue;
+        }
+
+        $result = $call();
+
+        expect($result instanceof QrPayment
+            ? ['qr_image' => $result->qrImage, 'reference' => $result->reference]
+            : ['status' => $result->status->value, 'gateway_status' => $result->gatewayStatus, 'gateway_reference' => $result->gatewayReference])
+            ->toBe($case['result'], $case['name']);
+    }
+});
+
+it('reads KBZ Pay responses like every other SDK', function () {
+    foreach (parity()['kbz_pay_responses']['cases'] as $case) {
+        $http = mockHttp(new Response(200, ['Content-Type' => 'application/json'], $case['body']));
+        $gateway = new KbzPay(KbzPayConfig::fromEnv(parity()['config']['env']), $http);
+        $call = fn () => $case['call'] === 'status' ? $gateway->status('ORDER_1') : $gateway->qr(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb'));
+
+        if (isset($case['error'])) {
+            parityApiError($call, $case['error'], $case['name']);
+
+            continue;
+        }
+
+        $result = $call();
+
+        expect($result instanceof QrPayment
+            ? ['qr_string' => $result->qrString, 'reference' => $result->reference]
+            : ['order_id' => $result->orderId, 'status' => $result->status->value, 'gateway_status' => $result->gatewayStatus, 'gateway_reference' => $result->gatewayReference, 'amount' => $result->amount])
+            ->toBe($case['result'], $case['name']);
     }
 });

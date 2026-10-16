@@ -39,7 +39,8 @@ final class KbzPayConfig
      * @param  int  $timeToLiveMinutes  Minutes the customer has to pay each order, 1 to 120. A payment's own `timeToLiveMinutes` overrides it.
      * @param  int  $timeoutSeconds  Seconds before the default HTTP client gives up, 30 by default. A client you pass keeps its own timeout.
      *
-     * @throws ConfigurationException When a setting is blank, the timeout is not greater than 0 or the time to live is out of range.
+     * @throws ConfigurationException When a setting is blank, the time to live is out of range or the timeout is not from 1 to 2147483647,
+     *                                checked in that order.
      */
     public function __construct(
         public readonly string $appId,
@@ -55,11 +56,8 @@ final class KbzPayConfig
         Config::requireValue('kbz_pay', 'merchant_code', $merchantCode);
         Config::requireValue('kbz_pay', 'api_url', $apiUrl);
         Config::requireValue('kbz_pay', 'pwa_url', $pwaUrl);
+        self::requireTimeToLive($timeToLiveMinutes);
         Config::requirePositive('kbz_pay', 'timeout_in_seconds', $timeoutSeconds);
-
-        if ($timeToLiveMinutes < 1 || $timeToLiveMinutes > 120) {
-            throw ConfigurationException::invalid('kbz_pay', 'time_to_live_in_minutes', self::TIME_TO_LIVE_REQUIREMENT);
-        }
 
         $this->apiUrl = rtrim($apiUrl, '/');
         $this->pwaUrl = rtrim($pwaUrl, '/').'/';
@@ -69,7 +67,7 @@ final class KbzPayConfig
     /**
      * @param  array{app_id?: string|null, app_key?: string|null, merchant_code?: string|null, api_url?: string|null, pwa_url?: string|null, time_to_live_in_minutes?: int|string|null, timeout_in_seconds?: int|string|null}  $config
      *
-     * @throws ConfigurationException When a setting is missing or invalid.
+     * @throws ConfigurationException When a setting is missing or invalid: the strings first, then the time to live, then the timeout.
      */
     public static function fromArray(array $config): self
     {
@@ -81,9 +79,21 @@ final class KbzPayConfig
             merchantCode: $config->required('merchant_code'),
             apiUrl: $config->required('api_url'),
             pwaUrl: $config->required('pwa_url'),
-            timeToLiveMinutes: $config->requiredInteger('time_to_live_in_minutes', self::TIME_TO_LIVE_REQUIREMENT),
+            timeToLiveMinutes: self::requireTimeToLive($config->requiredInteger('time_to_live_in_minutes', self::TIME_TO_LIVE_REQUIREMENT)),
             timeoutSeconds: $config->seconds('timeout_in_seconds', MyanmarPayments::DEFAULT_TIMEOUT_SECONDS),
         );
+    }
+
+    /**
+     * @throws ConfigurationException When the time to live is not from 1 to 120.
+     */
+    private static function requireTimeToLive(int $minutes): int
+    {
+        if ($minutes < 1 || $minutes > 120) {
+            throw ConfigurationException::invalid('kbz_pay', 'time_to_live_in_minutes', self::TIME_TO_LIVE_REQUIREMENT);
+        }
+
+        return $minutes;
     }
 
     /**

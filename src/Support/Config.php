@@ -14,6 +14,13 @@ use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
 final class Config
 {
     /**
+     * The largest whole number a setting may hold, the same in every Laranex SDK (2^31 - 1).
+     */
+    private const MAX_INTEGER = 2147483647;
+
+    private const MIN_INTEGER = -2147483648;
+
+    /**
      * @param  array<string, mixed>  $config
      */
     public function __construct(private readonly string $gateway, private readonly array $config) {}
@@ -30,38 +37,39 @@ final class Config
     }
 
     /**
-     * The value as a string, or the default when it is missing, blank or not a scalar.
+     * The value as a string, or the default when it is missing, blank or neither a string nor an integer. An integer
+     * becomes its decimal text (`200123` becomes `"200123"`); floats and booleans count as missing.
      */
     public function string(string $key, ?string $default = null): ?string
     {
         $value = $this->config[$key] ?? null;
 
-        return is_scalar($value) && ! is_bool($value) && trim((string) $value) !== '' ? (string) $value : $default;
+        if (is_int($value)) {
+            $value = (string) $value;
+        }
+
+        return is_string($value) && trim($value) !== '' ? $value : $default;
     }
 
     /**
-     * A whole number greater than 0, given as an integer or integer text such as `"300"`. A missing or blank value
-     * is the default when one is given.
+     * A whole number from 1 to 2147483647, given as an integer or integer text such as `"300"`. A missing or blank
+     * value is the default when one is given.
      *
-     * @throws ConfigurationException When the value is missing or blank without a default, or not a whole number greater than 0.
+     * @throws ConfigurationException When the value is missing or blank without a default, or not a whole number from 1 to 2147483647.
      */
     public function seconds(string $key, ?int $default = null): int
     {
-        $value = $this->config[$key] ?? null;
+        $value = $this->integer($key);
 
-        if ($value === null || (is_string($value) && trim($value) === '')) {
+        if ($value === null) {
             return $default ?? throw ConfigurationException::missing($this->gateway, $key);
         }
 
-        if (is_string($value) && preg_match('/^[+-]?[0-9]+\z/', trim($value)) === 1) {
-            $value = (int) trim($value);
-        }
-
-        if (! is_int($value) || $value <= 0) {
+        if ($value === false) {
             throw ConfigurationException::invalid($this->gateway, $key);
         }
 
-        return $value;
+        return self::requirePositive($this->gateway, $key, $value);
     }
 
     /**
@@ -77,9 +85,24 @@ final class Config
     /**
      * A whole number given as an integer or integer text, or null when it is missing or blank.
      *
-     * @throws ConfigurationException When the value is set but not a whole number, naming `$requirement`.
+     * @throws ConfigurationException When the value is set but not a whole number from -2147483648 to 2147483647, naming `$requirement`.
      */
     public function optionalInteger(string $key, string $requirement): ?int
+    {
+        $value = $this->integer($key);
+
+        if ($value === false) {
+            throw ConfigurationException::invalid($this->gateway, $key, $requirement);
+        }
+
+        return $value;
+    }
+
+    /**
+     * The value as a 32-bit whole number, null when it is missing or blank, and false when it is anything else
+     * (a float, a boolean, text that is not an integer, or a number outside -2147483648 to 2147483647).
+     */
+    private function integer(string $key): int|false|null
     {
         $value = $this->config[$key] ?? null;
 
@@ -87,15 +110,23 @@ final class Config
             return null;
         }
 
-        if (is_string($value) && preg_match('/^[+-]?[0-9]+\z/', trim($value)) === 1) {
-            $value = (int) trim($value);
+        if (is_string($value)) {
+            $text = trim($value);
+
+            if (preg_match('/^[+-]?[0-9]+\z/', $text) !== 1) {
+                return false;
+            }
+
+            $digits = ltrim(ltrim($text, '+-'), '0');
+
+            if (strlen($digits) > 10) {
+                return false;
+            }
+
+            $value = (int) $text;
         }
 
-        if (! is_int($value)) {
-            throw ConfigurationException::invalid($this->gateway, $key, $requirement);
-        }
-
-        return $value;
+        return is_int($value) && $value >= self::MIN_INTEGER && $value <= self::MAX_INTEGER ? $value : false;
     }
 
     /**
@@ -111,11 +142,11 @@ final class Config
     }
 
     /**
-     * A whole number of seconds the constructor was given: zero or less is invalid.
+     * A whole number of seconds the constructor was given: zero or less, or more than 2147483647, is invalid.
      */
     public static function requirePositive(string $gateway, string $key, int $value): int
     {
-        if ($value <= 0) {
+        if ($value <= 0 || $value > self::MAX_INTEGER) {
             throw ConfigurationException::invalid($gateway, $key);
         }
 

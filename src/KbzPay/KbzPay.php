@@ -18,6 +18,8 @@ use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
 use Laranex\PhpMyanmarPayments\Results\PaymentStatusResult;
 use Laranex\PhpMyanmarPayments\Results\QrPayment;
 use Laranex\PhpMyanmarPayments\Results\RedirectPayment;
+use Laranex\PhpMyanmarPayments\Support\Form;
+use Laranex\PhpMyanmarPayments\Support\Json;
 use Psr\Http\Client\ClientInterface;
 
 /**
@@ -98,9 +100,9 @@ class KbzPay implements PaymentGateway
     public function qr(KbzPayPaymentData $data): QrPayment
     {
         $order = $this->precreate($data, 'PAY_BY_QRCODE');
-        $qrCode = $order['response']['qrCode'] ?? null;
+        $qrCode = Json::scalar($order['response']['qrCode'] ?? null) ?? '';
 
-        if (! is_string($qrCode) || $qrCode === '') {
+        if ($qrCode === '') {
             throw new ApiException('KBZ Pay did not return a QR code.', raw: $order['response']);
         }
 
@@ -147,14 +149,15 @@ class KbzPay implements PaymentGateway
             'merch_order_id' => $orderId,
         ]);
 
-        $tradeStatus = trim((string) ($response['trade_status'] ?? ''));
+        $tradeStatus = trim(Json::scalarString($response['trade_status'] ?? null));
+        $reportedOrderId = Json::scalarString($response['merch_order_id'] ?? null);
 
         return new PaymentStatusResult(
-            orderId: isset($response['merch_order_id']) && (string) $response['merch_order_id'] !== '' ? (string) $response['merch_order_id'] : $orderId,
+            orderId: $reportedOrderId !== '' ? $reportedOrderId : $orderId,
             status: PaymentStatus::resolve(self::STATUSES, $tradeStatus),
             gatewayStatus: $tradeStatus,
-            gatewayReference: isset($response['mm_order_id']) ? (string) $response['mm_order_id'] : null,
-            amount: isset($response['total_amount']) ? (string) $response['total_amount'] : null,
+            gatewayReference: Json::scalar($response['mm_order_id'] ?? null),
+            amount: Json::scalar($response['total_amount'] ?? null),
             raw: $response,
         );
     }
@@ -173,14 +176,14 @@ class KbzPay implements PaymentGateway
             throw new SignatureVerificationException('KBZ Pay callback signature verification failed.', $input);
         }
 
-        $tradeStatus = trim((string) ($fields['trade_status'] ?? ''));
+        $tradeStatus = trim(Json::scalarString($fields['trade_status'] ?? null));
 
         return new PaymentCallback(
-            orderId: (string) ($fields['merch_order_id'] ?? ''),
+            orderId: Json::scalarString($fields['merch_order_id'] ?? null),
             status: PaymentStatus::resolve(self::STATUSES, $tradeStatus),
             gatewayStatus: $tradeStatus,
-            gatewayReference: isset($fields['mm_order_id']) ? (string) $fields['mm_order_id'] : null,
-            amount: isset($fields['total_amount']) ? (string) $fields['total_amount'] : null,
+            gatewayReference: Json::scalar($fields['mm_order_id'] ?? null),
+            amount: Json::scalar($fields['total_amount'] ?? null),
             raw: $fields,
             acknowledgement: new Acknowledgement(200, 'success'),
         );
@@ -201,7 +204,7 @@ class KbzPay implements PaymentGateway
             'trans_currency' => 'MMK',
             'title' => $data->title,
             'timeout_express' => $timeToLiveMinutes.'m',
-            'callback_info' => $data->callbackInfo === null ? null : urlencode($data->callbackInfo),
+            'callback_info' => $data->callbackInfo === null ? null : Form::escape($data->callbackInfo),
         ], fn (?string $value): bool => $value !== null && $value !== '');
 
         $nonce = $this->nonce();
@@ -210,11 +213,13 @@ class KbzPay implements PaymentGateway
             'notify_url' => $data->callbackUrl,
         ], $nonce, $timestamp);
 
-        if (! is_string($response['prepay_id'] ?? null) || $response['prepay_id'] === '') {
+        $prepayId = Json::scalar($response['prepay_id'] ?? null) ?? '';
+
+        if ($prepayId === '') {
             throw new ApiException('KBZ Pay did not return a prepay_id.', raw: $response);
         }
 
-        return ['prepay_id' => $response['prepay_id'], 'nonce_str' => $nonce, 'timestamp' => $timestamp, 'time_to_live_minutes' => $timeToLiveMinutes, 'response' => $response];
+        return ['prepay_id' => $prepayId, 'nonce_str' => $nonce, 'timestamp' => $timestamp, 'time_to_live_minutes' => $timeToLiveMinutes, 'response' => $response];
     }
 
     /**
@@ -243,9 +248,10 @@ class KbzPay implements PaymentGateway
         $body = $response->json();
         $result = is_array($body['Response'] ?? null) ? $body['Response'] : [];
 
-        if (! $response->successful() || ($result['result'] ?? null) !== 'SUCCESS' || (string) ($result['code'] ?? '') !== '0') {
-            $code = isset($result['code']) ? (string) $result['code'] : null;
-            $message = isset($result['msg']) ? (string) $result['msg'] : null;
+        $code = Json::scalar($result['code'] ?? null);
+
+        if (! $response->successful() || Json::scalar($result['result'] ?? null) !== 'SUCCESS' || $code !== '0') {
+            $message = Json::scalar($result['msg'] ?? null);
 
             throw new ApiException(
                 "KBZ Pay {$endpoint} failed".($code !== null && $code !== '' ? rtrim(": [{$code}] {$message}") : " with HTTP {$response->status}."),

@@ -93,7 +93,9 @@ class CyberSource implements PaymentGateway
      * read, so unsigned extra fields (e.g. a re-posted checkout form with `decision=ACCEPT` added) can't change the result.
      * The signed string is `name=value` pairs joined with ",", so `signed_field_names` must list itself, with no empty,
      * repeated or "=" holding names, and `decision` must be one CyberSource documents; a signed value holding
-     * ",decision=ACCEPT" can't be re-split into a different field list.
+     * ",decision=ACCEPT" can't be re-split into a different field list. A bad field list or signature fails with
+     * "CyberSource callback signature verification failed."; a signed post without a signed `decision` and
+     * `req_reference_number`, or with an unknown decision, fails with "CyberSource callback is malformed.".
      *
      * @throws SignatureVerificationException
      */
@@ -108,20 +110,17 @@ class CyberSource implements PaymentGateway
 
         $signed = array_intersect_key($payload, array_flip($this->signedFieldNames($payload)));
 
-        if (! isset($signed['decision'], $signed['req_reference_number'])) {
-            throw new SignatureVerificationException('CyberSource callback does not sign decision and req_reference_number.', $payload);
-        }
-        $decision = strtoupper(trim((string) ($signed['decision'] ?? '')));
+        $decision = strtoupper(trim(Json::scalarString($signed['decision'] ?? null)));
 
-        if (! array_key_exists($decision, self::STATUSES)) {
-            throw new SignatureVerificationException('CyberSource callback has an unknown decision.', $payload);
+        if (! isset($signed['decision'], $signed['req_reference_number']) || ! array_key_exists($decision, self::STATUSES)) {
+            throw new SignatureVerificationException('CyberSource callback is malformed.', $payload);
         }
 
         return new PaymentCallback(
-            orderId: (string) ($signed['req_reference_number'] ?? ''),
+            orderId: Json::scalarString($signed['req_reference_number']),
             status: PaymentStatus::resolve(self::STATUSES, $decision),
             gatewayStatus: $decision,
-            gatewayReference: isset($signed['transaction_id']) ? (string) $signed['transaction_id'] : null,
+            gatewayReference: Json::scalar($signed['transaction_id'] ?? null),
             amount: $this->amount($signed),
             raw: $signed + ['signature' => $payload['signature']],
         );
@@ -161,8 +160,10 @@ class CyberSource implements PaymentGateway
     private function amount(array $fields): ?string
     {
         foreach (['auth_amount', 'req_amount'] as $field) {
-            if (isset($fields[$field]) && (string) $fields[$field] !== '') {
-                return (string) $fields[$field];
+            $amount = Json::scalarString($fields[$field] ?? null);
+
+            if ($amount !== '') {
+                return $amount;
             }
         }
 

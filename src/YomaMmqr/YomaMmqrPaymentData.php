@@ -18,17 +18,22 @@ final class YomaMmqrPaymentData
      */
     public readonly Amount $amount;
 
+    private readonly bool $negativeAmount;
+
     /**
      * @param  string  $orderId  Your unique order number, at most 20 characters.
      * @param  Amount|int  $amount  Amount in whole kyat, e.g. `Amount::kyat(1000)`. Yoma does not accept decimals.
      * @param  string  $description  Shown on the payment slip, at most 50 characters.
+     *
+     * @throws InvalidPaymentDataException With every invalid field, a negative `$amount` included.
      */
     public function __construct(
         public readonly string $orderId,
         Amount|int $amount,
         public readonly string $description,
     ) {
-        $this->amount = Amount::from($amount);
+        $this->negativeAmount = is_int($amount) && $amount < 0;
+        $this->amount = $this->negativeAmount ? Amount::kyat(0) : Amount::from($amount);
 
         $this->validate();
     }
@@ -43,6 +48,7 @@ final class YomaMmqrPaymentData
         (new Validator)
             ->required('orderId', $this->orderId)
             ->max('orderId', $this->orderId, 20)
+            ->negative('amount', $this->negativeAmount)
             ->amount('Yoma MMQR', $this->amount, maxDecimals: 0)
             ->required('description', $this->description)
             ->max('description', $this->description, 50)

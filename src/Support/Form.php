@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Laranex\PhpMyanmarPayments\Support;
 
 /**
- * Decodes a urlencoded body like Go, Node and Python do: the first value of a repeated key wins,
+ * Decodes a urlencoded body or query string like Go, Node and Python do: the first value of a repeated key wins,
  * names are kept exactly as sent (no `[]`, `.` or space mangling) and `+` is a space.
  *
  * @internal
@@ -33,5 +33,13 @@ final class Form
         }
 
         return $form;
+    }
+
+    /**
+     * Encode a query string value like Go's `url.QueryEscape`: `urlencode()`, except that `~` stays as it is.
+     */
+    public static function escape(string $value): string
+    {
+        return str_replace('%7E', '~', urlencode($value));
     }
 }

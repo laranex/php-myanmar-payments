@@ -56,7 +56,17 @@ final class Transport
      */
     public function postJson(string $url, array $data, array $headers = []): HttpResponse
     {
-        return $this->post($url, (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), [
+        return $this->postJsonText($url, (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $headers);
+    }
+
+    /**
+     * Post a JSON body that is already encoded, e.g. one holding numbers with more digits than a PHP integer.
+     *
+     * @param  array<string, string>  $headers
+     */
+    public function postJsonText(string $url, string $json, array $headers = []): HttpResponse
+    {
+        return $this->post($url, $json, [
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
         ] + $headers);

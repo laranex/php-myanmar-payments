@@ -173,7 +173,7 @@ it('rejects a re-posted checkout form with an unsigned decision added', function
     $fields = $payment->fields + ['decision' => 'ACCEPT', 'req_reference_number' => 'ORDER-1'];
 
     $this->gateway->handleCallback(new CallbackRequest(http_build_query($fields)));
-})->throws(SignatureVerificationException::class, 'does not sign decision and req_reference_number');
+})->throws(SignatureVerificationException::class, 'CyberSource callback is malformed.');
 
 it('requires both decision and req_reference_number to be signed', function (string $signedFields) {
     $fields = ['decision' => 'ACCEPT', 'req_reference_number' => 'ORDER-1', 'signed_field_names' => $signedFields];
@@ -234,7 +234,7 @@ it('rejects a signed_field_names list that is not strictly formed', function (st
 
 it('rejects a decision CyberSource does not document', function () {
     $this->gateway->handleCallback(cyberSourceCallback(['decision' => 'APPROVED']));
-})->throws(SignatureVerificationException::class, 'unknown decision');
+})->throws(SignatureVerificationException::class, 'CyberSource callback is malformed.');
 
 it('reads a lowercase decision as before', function () {
     expect($this->gateway->handleCallback(cyberSourceCallback(['decision' => 'accept']))->status)->toBe(PaymentStatus::Successful);

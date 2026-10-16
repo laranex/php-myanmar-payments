@@ -274,3 +274,54 @@ it('validates payment data again on demand', function () {
         ->and(fn () => (new CyberSourcePaymentData('O1', 1, 'https://shop.test/cb', 'MMK', CyberSourceTransactionType::Sale, 'en-us'))->validate())->not->toThrow(InvalidPaymentDataException::class)
         ->and(fn () => (new WavePayPaymentData('1', 'https://shop.test/cb', 'https://shop.test/done', 'x', [new WavePayItem('A', 10)]))->validate())->not->toThrow(InvalidPaymentDataException::class);
 });
+
+it('checks the KBZ Pay time to live before the timeout in the constructor too', function () {
+    expect(fn () => new KbzPayConfig('a', 'k', 'm', 'https://kbz.test', 'https://pwa.test', 200, 0))
+        ->toThrow(ConfigurationException::class, 'The kbz_pay configuration [time_to_live_in_minutes] must be a whole number from 1 to 120.')
+        ->and(fn () => new KbzPayConfig('a', 'k', 'm', 'https://kbz.test', 'https://pwa.test', 15, 2147483648))
+        ->toThrow(ConfigurationException::class, 'The kbz_pay configuration [timeout_in_seconds] must be a whole number greater than 0.')
+        ->and((new KbzPayConfig('a', 'k', 'm', 'https://kbz.test', 'https://pwa.test', 15, 2147483647))->timeoutSeconds)->toBe(2147483647);
+});
+
+it('rejects whole-number settings above 2147483647 given in code', function (Closure $build, string $key) {
+    expect($build)->toThrow(fn (ConfigurationException $e) => expect($e->key)->toBe($key));
+})->with([
+    'Wave time to live' => [fn () => new WavePayConfig('m', 's', 'Shop', 'https://wave.test', 'https://wave.test', 2147483648), 'time_to_live_in_seconds'],
+    'Wave time to live array' => [fn () => WavePayConfig::fromArray(gatewayConfig('wave_pay', ['time_to_live_in_seconds' => 2147483648])), 'time_to_live_in_seconds'],
+    'AYA timeout' => [fn () => new AyaPayConfig('k', 's', 'https://aya.test', 2147483648), 'timeout_in_seconds'],
+    'KBZ time to live array' => [fn () => KbzPayConfig::fromArray(gatewayConfig('kbz_pay', ['time_to_live_in_minutes' => -2147483649])), 'time_to_live_in_minutes'],
+]);
+
+it('takes integer credentials as their decimal text', function () {
+    $config = KbzPayConfig::fromArray(gatewayConfig('kbz_pay', ['merchant_code' => 200123, 'app_id' => 0]));
+
+    expect([$config->merchantCode, $config->appId])->toBe(['200123', '0'])
+        ->and(fn () => KbzPayConfig::fromArray(gatewayConfig('kbz_pay', ['merchant_code' => 200123.0])))->toThrow(ConfigurationException::class, 'missing [merchant_code]');
+});
+
+it('keeps a negative item amount for validation and writes exact item JSON', function () {
+    $negative = new WavePayItem('A', -5);
+    $exact = new WavePayItem('Big "one"', Amount::parse('099999999999999999999'));
+
+    expect($negative->negativeAmount)->toBeTrue()
+        ->and($negative->amount->toString())->toBe('0')
+        ->and($exact->negativeAmount)->toBeFalse()
+        ->and($exact->toJson())->toBe('{"name":"Big \"one\"","amount":99999999999999999999}');
+});
+
+it('counts KBZ Pay\'s callbackInfo limit on the escaped text, where "~" stays one character', function () {
+    expect(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', callbackInfo: str_repeat('~', 512)))->not->toThrow(InvalidPaymentDataException::class)
+        ->and(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', callbackInfo: str_repeat('~', 511).' '))->not->toThrow(InvalidPaymentDataException::class)
+        ->and(fn () => new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', callbackInfo: str_repeat('~', 511).'/'))->toThrow(InvalidPaymentDataException::class, 'The callbackInfo field must not be greater than 512 characters.');
+});
+
+it('posts JSON text as it is given', function () {
+    $http = mockHttp(jsonResponse(['ok' => true]));
+
+    $response = (new Transport($http, 30))->postJsonText('https://api.test/x', '{"amount":100000000000000000000}', ['X-Test' => '1']);
+
+    expect((string) $http->getLastRequest()->getBody())->toBe('{"amount":100000000000000000000}')
+        ->and($http->getLastRequest()->getHeaderLine('Content-Type'))->toBe('application/json')
+        ->and($http->getLastRequest()->getHeaderLine('X-Test'))->toBe('1')
+        ->and($response->json())->toBe(['ok' => true]);
+});
