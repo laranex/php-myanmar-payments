@@ -15,7 +15,7 @@ use Laranex\PhpMyanmarPayments\KbzPay\KbzPayPaymentData;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPaySigner;
 
 beforeEach(function () {
-    $this->config = new KbzPayConfig(appId: 'kp123', appKey: 'secret-key', merchantCode: '100001', timeoutSeconds: 30, timeToLiveMinutes: 15);
+    $this->config = KbzPayConfig::fromArray(gatewayConfig('kbz_pay'));
     $this->signer = new KbzPaySigner('secret-key');
     $this->data = new KbzPayPaymentData(orderId: 'ORDER_1', amount: 1000, callbackUrl: 'https://shop.test/kbz/callback');
 });
@@ -176,15 +176,18 @@ it('validates the order against KBZ limits', function (array $overrides, string 
     'time to live above 120' => [['timeToLiveMinutes' => 121], 'timeToLiveMinutes'],
 ]);
 
-it('builds config from an array and names a missing key', function () {
-    expect(KbzPayConfig::fromArray(['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c', 'timeout_in_seconds' => '30'])->apiUrl)
+it('builds config from an array and names a missing key', function (string $key) {
+    expect(KbzPayConfig::fromArray(gatewayConfig('kbz_pay', ['timeout_in_seconds' => '30']))->apiUrl)
         ->toBe(KbzPayConfig::PRODUCTION_API_URL);
 
-    KbzPayConfig::fromArray(['app_id' => 'a', 'merchant_code' => 'c', 'timeout_in_seconds' => 30]);
-})->throws(ConfigurationException::class, '[app_key]');
+    $config = gatewayConfig('kbz_pay');
+    unset($config[$key]);
+
+    expect(fn () => KbzPayConfig::fromArray($config))->toThrow(ConfigurationException::class, "[{$key}]");
+})->with(['app_key', 'api_url', 'pwa_url', 'time_to_live_in_minutes']);
 
 it('normalizes the PWA url so the query always follows "#/"', function (string $pwaUrl) {
-    expect((new KbzPayConfig('a', 'b', 'c', 30, pwaUrl: $pwaUrl))->pwaUrl)->toBe('https://static.kbzpay.com/pgw/uat/pwa/#/');
+    expect(KbzPayConfig::fromArray(gatewayConfig('kbz_pay', ['pwa_url' => $pwaUrl]))->pwaUrl)->toBe('https://static.kbzpay.com/pgw/uat/pwa/#/');
 })->with(['https://static.kbzpay.com/pgw/uat/pwa/#', 'https://static.kbzpay.com/pgw/uat/pwa/#/']);
 
 it('sends decimal amounts as KBZ allows up to two decimal places', function () {

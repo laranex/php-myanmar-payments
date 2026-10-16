@@ -183,7 +183,7 @@ class YomaMmqr implements PaymentGateway
     {
         $payload = $request->parsedBody();
 
-        if ($this->config->webhookSecret !== null && ! hash_equals($this->config->webhookSecret, (string) $request->header('X-Webhook-Secret'))) {
+        if (! hash_equals($this->config->webhookSecret, (string) $request->header('X-Webhook-Secret'))) {
             throw new SignatureVerificationException('Yoma MMQR callback has a missing or wrong X-Webhook-Secret header.', $payload);
         }
 

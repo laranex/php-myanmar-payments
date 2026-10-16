@@ -16,8 +16,8 @@ use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrConfig;
 
 it('builds each configured gateway once', function () {
     $payments = new MyanmarPayments([
-        'kbz_pay' => ['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c', 'timeout_in_seconds' => 30],
-        'yoma_mmqr' => ['merchant_id' => 'm', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h', 'api_version' => 'v1rc', 'timeout_in_seconds' => 30],
+        'kbz_pay' => gatewayConfig('kbz_pay'),
+        'yoma_mmqr' => gatewayConfig('yoma_mmqr'),
     ], mockHttp());
 
     expect($payments->kbzPay())->toBeInstanceOf(KbzPay::class)->toBe($payments->kbzPay())
@@ -26,11 +26,11 @@ it('builds each configured gateway once', function () {
 
 it('builds every gateway from one configuration array', function () {
     $payments = new MyanmarPayments([
-        'kbz_pay' => ['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c', 'timeout_in_seconds' => 30],
-        'wave_money' => ['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => 300, 'timeout_in_seconds' => 30],
-        'aya_pay' => ['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => 30],
-        'yoma_mmqr' => ['merchant_id' => 'm', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h', 'api_version' => 'v1rc', 'timeout_in_seconds' => 30],
-        'cyber_source' => ['profile_id' => 'p', 'access_key' => 'a', 'secret_key' => 's'],
+        'kbz_pay' => gatewayConfig('kbz_pay'),
+        'wave_money' => gatewayConfig('wave_money'),
+        'aya_pay' => gatewayConfig('aya_pay'),
+        'yoma_mmqr' => gatewayConfig('yoma_mmqr'),
+        'cyber_source' => gatewayConfig('cyber_source'),
     ], mockHttp());
 
     expect($payments->kbzPay())->toBeInstanceOf(KbzPay::class)
@@ -55,33 +55,35 @@ it('only complains about a gateway when it is used without configuration', funct
     (new MyanmarPayments([], mockHttp()))->waveMoney();
 })->throws(ConfigurationException::class, 'wave_money configuration is missing [merchant_id]');
 
-it('requires every setting except the URL overrides', function (array $config, string $key) {
+it('requires every setting except the HTTP timeout', function (string $key) {
+    $config = gatewayConfig('aya_pay');
+    unset($config[$key]);
+
     expect(fn () => AyaPayConfig::fromArray($config))->toThrow(ConfigurationException::class, "[{$key}]");
-})->with([
-    [['app_secret' => 's', 'timeout_in_seconds' => 30], 'app_key'],
-    [['app_key' => 'k', 'timeout_in_seconds' => 30], 'app_secret'],
-]);
+})->with(['app_key', 'app_secret', 'base_url']);
 
 it('defaults the HTTP timeout to 30 seconds when it is missing or blank', function (array $config) {
-    expect(AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's'] + $config)->timeoutSeconds)->toBe(30)
+    expect(AyaPayConfig::fromArray(array_replace(gatewayConfig('aya_pay'), ['timeout_in_seconds' => null], $config))->timeoutSeconds)->toBe(30)
         ->and(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)->toBe(30);
 })->with([[[]], [['timeout_in_seconds' => null]], [['timeout_in_seconds' => ' ']]]);
 
 it('defaults the HTTP timeout when the constructor is not given one', function () {
-    expect((new KbzPayConfig('a', 'b', 'c'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
-        ->and((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 300))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
-        ->and((new AyaPayConfig('k', 's'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
-        ->and((new YomaMmqrConfig('M', 'c', 's', 'h', 'v1rc'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
-        ->and(KbzPayConfig::fromArray(['app_id' => 'a', 'app_key' => 'b', 'merchant_code' => 'c'])->timeoutSeconds)->toBe(30)
-        ->and(WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => 300])->timeoutSeconds)->toBe(30)
-        ->and(YomaMmqrConfig::fromArray(['merchant_id' => 'M', 'client_id' => 'c', 'client_secret' => 's', 'webhook_hashkey' => 'h', 'api_version' => 'v1rc'])->timeoutSeconds)->toBe(30);
+    $without = fn (string $gateway): array => array_diff_key(gatewayConfig($gateway), ['timeout_in_seconds' => true]);
+
+    expect((new KbzPayConfig('a', 'b', 'c', 'https://kbz.test', 'https://pwa.test/#/', 15))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and((new WaveMoneyConfig('m', 's', 'Shop', 'https://wave.test', 'https://wave.test', 300))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and((new AyaPayConfig('k', 's', 'https://aya.test'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and((new YomaMmqrConfig('M', 'c', 's', 'h', 'v1rc', 'shared', 'https://yoma.test'))->timeoutSeconds)->toBe(MyanmarPayments::DEFAULT_TIMEOUT_SECONDS)
+        ->and(KbzPayConfig::fromArray($without('kbz_pay'))->timeoutSeconds)->toBe(30)
+        ->and(WaveMoneyConfig::fromArray($without('wave_money'))->timeoutSeconds)->toBe(30)
+        ->and(YomaMmqrConfig::fromArray($without('yoma_mmqr'))->timeoutSeconds)->toBe(30);
 });
 
 it('reads whole numbers of seconds from integers and integer text', function (mixed $value, int $seconds) {
-    expect(AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => $value])->timeoutSeconds)->toBe($seconds);
+    expect(AyaPayConfig::fromArray(gatewayConfig('aya_pay', ['timeout_in_seconds' => $value]))->timeoutSeconds)->toBe($seconds);
 })->with([[30, 30], ['30', 30], [' 45 ', 45], ['+10', 10]]);
 
 it('rejects seconds that are not a whole number greater than 0', function (mixed $value) {
-    expect(fn () => AyaPayConfig::fromArray(['app_key' => 'k', 'app_secret' => 's', 'timeout_in_seconds' => $value]))
+    expect(fn () => AyaPayConfig::fromArray(gatewayConfig('aya_pay', ['timeout_in_seconds' => $value])))
         ->toThrow(ConfigurationException::class, 'The aya_pay configuration [timeout_in_seconds] must be a whole number greater than 0.');
 })->with([0, -5, '0', '-5', 'five', '1.5', 1.5, true]);

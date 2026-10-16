@@ -9,7 +9,6 @@ use Laranex\PhpMyanmarPayments\Contracts\PaymentGateway;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Exceptions\ApiException;
 use Laranex\PhpMyanmarPayments\Exceptions\ConfigurationException;
-use Laranex\PhpMyanmarPayments\Exceptions\InvalidPaymentDataException;
 use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\Acknowledgement;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
@@ -77,7 +76,6 @@ class KbzPay implements PaymentGateway
      * the URL registered with KBZ.
      *
      * @throws ApiException
-     * @throws InvalidPaymentDataException When neither the payment nor the configuration sets a time to live.
      */
     public function pwa(KbzPayPaymentData $data): RedirectPayment
     {
@@ -96,7 +94,6 @@ class KbzPay implements PaymentGateway
      * Create an order and get a QR payload for the customer to scan with the KBZ Pay app.
      *
      * @throws ApiException
-     * @throws InvalidPaymentDataException When neither the payment nor the configuration sets a time to live.
      */
     public function qr(KbzPayPaymentData $data): QrPayment
     {
@@ -122,7 +119,6 @@ class KbzPay implements PaymentGateway
      * The SDK's own result only means the payment screen closed. Rely on the callback or `status()`.
      *
      * @throws ApiException
-     * @throws InvalidPaymentDataException When neither the payment nor the configuration sets a time to live.
      */
     public function app(KbzPayPaymentData $data): AppPayment
     {
@@ -195,8 +191,7 @@ class KbzPay implements PaymentGateway
      */
     private function precreate(KbzPayPaymentData $data, string $tradeType): array
     {
-        $timeToLiveMinutes = $data->timeToLiveMinutes ?? $this->config->timeToLiveMinutes
-            ?? throw new InvalidPaymentDataException(['timeToLiveMinutes' => 'The timeToLiveMinutes field is required when the kbz_pay configuration has no [time_to_live_in_minutes].']);
+        $timeToLiveMinutes = $data->timeToLiveMinutes ?? $this->config->timeToLiveMinutes;
         $biz = array_filter([
             'appid' => $this->config->appId,
             'merch_code' => $this->config->merchantCode,

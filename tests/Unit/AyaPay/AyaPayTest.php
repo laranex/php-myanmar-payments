@@ -13,7 +13,7 @@ use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 
 beforeEach(function () {
-    $this->config = new AyaPayConfig(appKey: 'app-key', appSecret: 'test-secret', timeoutSeconds: 30);
+    $this->config = AyaPayConfig::fromArray(gatewayConfig('aya_pay'));
     $this->vector = testVector('aya_pay/callback_payload.json');
 });
 

@@ -13,7 +13,7 @@ use Laranex\PhpMyanmarPayments\Exceptions\SignatureVerificationException;
 use Laranex\PhpMyanmarPayments\Http\CallbackRequest;
 
 beforeEach(function () {
-    $this->gateway = new CyberSource(new CyberSourceConfig(profileId: 'profile', accessKey: 'access', secretKey: 'secret'));
+    $this->gateway = new CyberSource(CyberSourceConfig::fromArray(gatewayConfig('cyber_source')));
 });
 
 /**

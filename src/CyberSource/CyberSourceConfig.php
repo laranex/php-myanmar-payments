@@ -9,8 +9,8 @@ use Laranex\PhpMyanmarPayments\Support\Config;
 use Laranex\PhpMyanmarPayments\Support\Env;
 
 /**
- * Credentials and endpoints for CyberSource Secure Acceptance (hosted checkout). To test against the test
- * environment, set the URL override to its URL.
+ * Credentials and endpoints for CyberSource Secure Acceptance (hosted checkout). Every setting is required;
+ * `PRODUCTION_URL` names production's base URL.
  */
 final class CyberSourceConfig
 {
@@ -22,27 +22,28 @@ final class CyberSourceConfig
      * @param  string  $profileId  The Secure Acceptance profile id.
      * @param  string  $accessKey  The profile's access key.
      * @param  string  $secretKey  The profile's secret key, used to sign fields.
-     * @param  string|null  $baseUrl  Override the Secure Acceptance base URL; production when unset.
+     * @param  string  $baseUrl  The Secure Acceptance base URL, e.g. `PRODUCTION_URL` or `https://testsecureacceptance.cybersource.com`.
      *
-     * @throws ConfigurationException When a credential is blank.
+     * @throws ConfigurationException When a setting is blank.
      */
     public function __construct(
         public readonly string $profileId,
         public readonly string $accessKey,
         public readonly string $secretKey,
-        ?string $baseUrl = null,
+        string $baseUrl,
     ) {
         Config::requireValue('cyber_source', 'profile_id', $profileId);
         Config::requireValue('cyber_source', 'access_key', $accessKey);
         Config::requireValue('cyber_source', 'secret_key', $secretKey);
+        Config::requireValue('cyber_source', 'base_url', $baseUrl);
 
-        $this->baseUrl = rtrim(Config::optionalValue($baseUrl) ?? self::PRODUCTION_URL, '/');
+        $this->baseUrl = rtrim($baseUrl, '/');
     }
 
     /**
      * @param  array{profile_id?: string|null, access_key?: string|null, secret_key?: string|null, base_url?: string|null}  $config
      *
-     * @throws ConfigurationException When a credential is missing.
+     * @throws ConfigurationException When a setting is missing.
      */
     public static function fromArray(array $config): self
     {
@@ -52,7 +53,7 @@ final class CyberSourceConfig
             profileId: $config->required('profile_id'),
             accessKey: $config->required('access_key'),
             secretKey: $config->required('secret_key'),
-            baseUrl: $config->string('base_url'),
+            baseUrl: $config->required('base_url'),
         );
     }
 
@@ -61,7 +62,7 @@ final class CyberSourceConfig
      *
      * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
      *
-     * @throws ConfigurationException When a credential is missing.
+     * @throws ConfigurationException When a setting is missing.
      */
     public static function fromEnv(?array $env = null): self
     {

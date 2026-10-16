@@ -44,11 +44,11 @@ function parityGateway(string $gateway): PaymentGateway
     $secrets = parity()['secrets'];
 
     return match ($gateway) {
-        'kbz_pay' => new KbzPay(['app_id' => 'kp123', 'app_key' => $secrets['kbz_pay_app_key'], 'merchant_code' => '100001', 'timeout_in_seconds' => 30], mockHttp()),
-        'wave_money' => new WaveMoney(['merchant_id' => 'merchant', 'secret_key' => $secrets['wave_money_secret_key'], 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => 300, 'timeout_in_seconds' => 30], mockHttp()),
-        'aya_pay' => new AyaPay(['app_key' => 'app-key', 'app_secret' => $secrets['aya_pay_app_secret'], 'timeout_in_seconds' => 30], mockHttp()),
-        'yoma_mmqr' => new YomaMmqr(['merchant_id' => 'M001', 'client_id' => 'client', 'client_secret' => 'secret', 'webhook_hashkey' => $secrets['yoma_mmqr_webhook_hashkey'], 'api_version' => 'v1rc', 'timeout_in_seconds' => 30], mockHttp()),
-        'cyber_source' => new CyberSource(['profile_id' => 'profile', 'access_key' => 'access', 'secret_key' => $secrets['cyber_source_secret_key']]),
+        'kbz_pay' => new KbzPay(gatewayConfig('kbz_pay', ['app_key' => $secrets['kbz_pay_app_key']]), mockHttp()),
+        'wave_money' => new WaveMoney(gatewayConfig('wave_money', ['merchant_id' => 'merchant', 'secret_key' => $secrets['wave_money_secret_key']]), mockHttp()),
+        'aya_pay' => new AyaPay(gatewayConfig('aya_pay', ['app_secret' => $secrets['aya_pay_app_secret']]), mockHttp()),
+        'yoma_mmqr' => new YomaMmqr(gatewayConfig('yoma_mmqr', ['webhook_hashkey' => $secrets['yoma_mmqr_webhook_hashkey'], 'webhook_secret' => $secrets['yoma_mmqr_webhook_secret']]), mockHttp()),
+        'cyber_source' => new CyberSource(gatewayConfig('cyber_source', ['secret_key' => $secrets['cyber_source_secret_key']])),
     };
 }
 
@@ -69,7 +69,7 @@ function parityCallbacks(): array
 }
 
 it('verifies every shared callback vector', function (string $gateway, array $case) {
-    $request = new CallbackRequest($case['body'], ['Content-Type' => $case['content_type']]);
+    $request = new CallbackRequest($case['body'], ['Content-Type' => $case['content_type'], ...($case['headers'] ?? [])]);
     $expected = $case['expected'];
 
     if (! $expected['valid']) {
@@ -132,12 +132,12 @@ function parityUrls(KbzPayConfig|WaveMoneyConfig|AyaPayConfig|YomaMmqrConfig|Cyb
 {
     return match (true) {
         $config instanceof KbzPayConfig => ['api_url' => $config->apiUrl, 'pwa_url' => $config->pwaUrl],
-        $config instanceof WaveMoneyConfig => ['base_url' => $config->baseUrl],
+        $config instanceof WaveMoneyConfig => ['base_url' => $config->baseUrl, 'base_redirect_url' => $config->baseRedirectUrl],
         default => ['base_url' => $config->baseUrl],
     };
 }
 
-it('defaults to the production URLs and takes the UAT URLs as overrides like every other SDK', function () {
+it('reads the production and UAT URLs like every other SDK', function () {
     $vector = parity()['config'];
 
     foreach ($vector['urls'] as $gateway => $urls) {
@@ -201,7 +201,7 @@ it('caches the Yoma MMQR token under the shared key', function () {
     $cache = new ArrayCache;
     $http = mockHttp(jsonResponse(['access_token' => 'token-1', 'expires_in' => 28800]), jsonResponse(['refLabel' => 'R1', 'paymentStatus' => 'PENDING']));
 
-    (new YomaMmqr(['merchant_id' => 'M001', 'client_id' => $vector['client_id'], 'client_secret' => 's', 'webhook_hashkey' => 'h', 'api_version' => 'v1rc', 'timeout_in_seconds' => 30, 'base_url' => $vector['base_url']], $http, $cache))->status('R1');
+    (new YomaMmqr(gatewayConfig('yoma_mmqr', ['client_id' => $vector['client_id'], 'base_url' => $vector['base_url']]), $http, $cache))->status('R1');
 
     expect($cache->get($vector['key']))->toBe('token-1');
 });
@@ -264,7 +264,7 @@ it('applies per-payment Wave Money overrides like every other SDK', function () 
 
     foreach ($vector['cases'] as $case) {
         $http = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => 'T1']));
-        $gateway = new WaveMoney(new WaveMoneyConfig($config['merchant_id'], $config['secret_key'], $config['merchant_name'], $config['time_to_live_in_seconds']), $http);
+        $gateway = new WaveMoney(WaveMoneyConfig::fromArray(gatewayConfig('wave_money', $config)), $http);
 
         $gateway->initiate($build($case['merchant_name'], $case['time_to_live_in_seconds']));
 
@@ -279,46 +279,17 @@ it('applies per-payment Wave Money overrides like every other SDK', function () 
     }
 });
 
-it('takes KBZ Pay\'s time to live from the payment, then the configuration, like every other SDK', function () {
+it('takes KBZ Pay\'s time to live from the payment over the configuration like every other SDK', function () {
     $vector = parity()['kbz_pay_time_to_live'];
     $env = parity()['config']['env'];
 
     foreach ($vector['cases'] as $case) {
         $http = mockHttp(jsonResponse(['Response' => ['result' => 'SUCCESS', 'code' => '0', 'msg' => 'success', 'prepay_id' => 'PREPAY123', 'qrCode' => 'qr']]));
-        $settings = $env;
-        unset($settings[$vector['variable']]);
-        $config = KbzPayConfig::fromEnv($case['config'] === null ? $settings : [$vector['variable'] => $case['config']] + $settings);
+        $config = KbzPayConfig::fromEnv([$vector['variable'] => $case['config']] + $env);
 
         $payment = (new KbzPay($config, $http))->qr(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb', timeToLiveMinutes: $case['payment']));
 
         expect(requestJson($http->getLastRequest())['Request']['biz_content']['timeout_express'] ?? null)->toBe($case['timeout_express'], (string) json_encode($case))
             ->and($payment->expiresAt)->not->toBeNull();
-    }
-
-    foreach ($vector['missing']['configs'] as $value) {
-        $settings = $env;
-        unset($settings[$vector['variable']]);
-        $http = mockHttp();
-        $gateway = new KbzPay(KbzPayConfig::fromEnv($value === null ? $settings : [$vector['variable'] => $value] + $settings), $http);
-
-        expect(fn () => $gateway->qr(new KbzPayPaymentData('ORDER_1', 1000, 'https://shop.test/cb')))
-            ->toThrow(fn (InvalidPaymentDataException $e) => expect($e->errors())->toBe([$vector['missing']['field'] => $vector['missing']['message']]))
-            ->and($http->getRequests())->toBe([]);
-    }
-});
-
-it('requires a Wave Money time to live from the payment or the configuration like every other SDK', function () {
-    $vector = parity()['wave_money_time_to_live_missing'];
-    $env = parity()['config']['env'];
-
-    foreach ($vector['configs'] as $value) {
-        $settings = $env;
-        unset($settings[$vector['variable']]);
-        $http = mockHttp();
-        $gateway = new WaveMoney(WaveMoneyConfig::fromEnv($value === null ? $settings : [$vector['variable'] => $value] + $settings), $http);
-
-        expect(fn () => $gateway->initiate(new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'Order 100', [new WaveMoneyItem('Shoes', 1000)])))
-            ->toThrow(fn (InvalidPaymentDataException $e) => expect($e->errors())->toBe([$vector['field'] => $vector['message']]))
-            ->and($http->getRequests())->toBe([]);
     }
 });

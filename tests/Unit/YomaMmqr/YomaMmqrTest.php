@@ -16,7 +16,8 @@ use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrPaymentData;
 use Psr\SimpleCache\CacheInterface;
 
 beforeEach(function () {
-    $this->config = new YomaMmqrConfig(merchantId: 'M001', clientId: 'client', clientSecret: 'secret', webhookHashKey: 'hash-key', apiVersion: 'v1rc', timeoutSeconds: 30);
+    $this->config = YomaMmqrConfig::fromArray(gatewayConfig('yoma_mmqr'));
+    $this->secret = ['X-Webhook-Secret' => 'webhook-secret'];
 });
 
 function tokenResponse(string $token = 'token-1'): Response
@@ -98,7 +99,7 @@ it('verifies the callback hash keyed with the order number and hash key', functi
 
     $callback = (new YomaMmqr($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray([
         'orderNumber' => 'ORD-2026-001235', 'status' => $status, 'hashValue' => $hash,
-    ]));
+    ], $this->secret));
 
     expect($callback->orderId)->toBe('ORD-2026-001235')->and($callback->status)->toBe($expected);
 })->with([
@@ -109,30 +110,32 @@ it('verifies the callback hash keyed with the order number and hash key', functi
 it('rejects a callback with a wrong hash', function () {
     (new YomaMmqr($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray([
         'orderNumber' => 'ORD-1', 'status' => 'success', 'hashValue' => hash_hmac('sha256', 'orderNumber=ORD-1&status=fail', 'ORD-1hash-key'),
-    ]));
-})->throws(SignatureVerificationException::class);
+    ], $this->secret));
+})->throws(SignatureVerificationException::class, 'hash');
 
-it('checks the webhook secret header when one is configured', function () {
-    $config = new YomaMmqrConfig(merchantId: 'M001', clientId: 'c', clientSecret: 's', webhookHashKey: 'hash-key', apiVersion: 'v1rc', timeoutSeconds: 30, webhookSecret: 'shared');
+it('requires the webhook secret header on every callback', function (array $headers) {
     $payload = ['orderNumber' => 'ORD-1', 'status' => 'success', 'hashValue' => hash_hmac('sha256', 'orderNumber=ORD-1&status=success', 'ORD-1hash-key')];
 
-    expect((new YomaMmqr($config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload, ['X-Webhook-Secret' => 'shared']))->isSuccessful())->toBeTrue();
+    expect((new YomaMmqr($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload, $this->secret))->isSuccessful())->toBeTrue();
 
-    (new YomaMmqr($config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
-})->throws(SignatureVerificationException::class, 'X-Webhook-Secret');
+    (new YomaMmqr($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload, $headers));
+})->with([
+    'no header' => [[]],
+    'a wrong secret' => [['X-Webhook-Secret' => 'wrong']],
+])->throws(SignatureVerificationException::class, 'X-Webhook-Secret');
 
 it('enforces the order number and description limits', function () {
     new YomaMmqrPaymentData(str_repeat('A', 21), 1000, str_repeat('d', 51));
 })->throws(InvalidPaymentDataException::class);
 
-it('defaults to the production payment hub', function () {
-    expect((new YomaMmqrConfig(merchantId: 'M', clientId: 'c', clientSecret: 's', webhookHashKey: 'h', apiVersion: 'v1rc', timeoutSeconds: 30))->baseUrl)
-        ->toBe('https://paymenthubapi.yomabank.com');
+it('uses the base URL it is given', function () {
+    expect(YomaMmqrConfig::fromArray(gatewayConfig('yoma_mmqr', ['base_url' => 'https://devapi.yomabank.net/']))->baseUrl)
+        ->toBe('https://devapi.yomabank.net');
 });
 
-it('requires the API version', function () {
-    new YomaMmqrConfig(merchantId: 'M', clientId: 'c', clientSecret: 's', webhookHashKey: 'h', apiVersion: ' ', timeoutSeconds: 30);
-})->throws(ConfigurationException::class, 'The yoma_mmqr configuration is missing [api_version].');
+it('requires the API version, the webhook secret and the base URL', function (string $key) {
+    YomaMmqrConfig::fromArray(gatewayConfig('yoma_mmqr', [$key => ' ']));
+})->with(['api_version', 'webhook_secret', 'base_url'])->throws(ConfigurationException::class, 'The yoma_mmqr configuration is missing');
 
 it('forgets the cached token so the next call authenticates again', function () {
     $cache = new ArrayCache;
@@ -155,7 +158,7 @@ it('forgets the cached token so the next call authenticates again', function () 
 });
 
 it('rejects a callback whose fields are not strings', function (array $payload) {
-    (new YomaMmqr($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload));
+    (new YomaMmqr($this->config, mockHttp()))->handleCallback(CallbackRequest::fromArray($payload, $this->secret));
 })->with([
     'order number array' => [['orderNumber' => ['ORD-1'], 'status' => 'success', 'hashValue' => 'x']],
     'hash array' => [['orderNumber' => 'ORD-1', 'status' => 'success', 'hashValue' => ['x']]],

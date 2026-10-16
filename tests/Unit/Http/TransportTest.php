@@ -23,7 +23,7 @@ it('turns an unreachable gateway into an ApiException with HTTP status 0', funct
     };
 
     try {
-        (new KbzPay(new KbzPayConfig('app', 'key', 'merchant', 30), $http))->status('ORDER_1');
+        (new KbzPay(KbzPayConfig::fromArray(gatewayConfig('kbz_pay')), $http))->status('ORDER_1');
     } catch (ApiException $e) {
         expect($e->getMessage())->toStartWith('Could not reach '.KbzPayConfig::PRODUCTION_API_URL.'/queryorder: Connection refused')
             ->and($e->httpStatus)->toBe(0)

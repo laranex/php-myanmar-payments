@@ -14,7 +14,7 @@ use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyItem;
 use Laranex\PhpMyanmarPayments\WaveMoney\WaveMoneyPaymentData;
 
 beforeEach(function () {
-    $this->config = new WaveMoneyConfig(merchantId: 'testmerchantID', secretKey: 'test-secret', merchantName: 'Shop', timeToLiveSeconds: 300, timeoutSeconds: 30);
+    $this->config = WaveMoneyConfig::fromArray(gatewayConfig('wave_money'));
     $this->data = new WaveMoneyPaymentData(
         orderId: '100',
         callbackUrl: 'https://shop.test/wave/callback',
@@ -52,14 +52,14 @@ it('posts a form encoded, hashed payment request and redirects to authenticate',
         ->and($payment->gatewayReference)->toBe('enc/123+abc');
 });
 
-it('requests and redirects on the base URL as it is, port included', function () {
+it('requests payments on the base URL and sends the customer to the base redirect URL', function () {
     $http = mockHttp(jsonResponse(['message' => 'success', 'transaction_id' => 'tx1']));
-    $config = new WaveMoneyConfig('testmerchantID', 'test-secret', 'Shop', 300, 30, baseUrl: 'https://preprodpayments.wavemoney.io:8107/');
+    $config = WaveMoneyConfig::fromArray(gatewayConfig('wave_money', ['base_url' => 'https://preprodpayments.wavemoney.io:8107/', 'base_redirect_url' => 'https://preprodpayments.wavemoney.io/']));
 
     $payment = (new WaveMoney($config, $http))->initiate($this->data);
 
     expect((string) $http->getLastRequest()->getUri())->toBe('https://preprodpayments.wavemoney.io:8107/payment')
-        ->and($payment->url)->toBe('https://preprodpayments.wavemoney.io:8107/authenticate?transaction_id=tx1');
+        ->and($payment->url)->toBe('https://preprodpayments.wavemoney.io/authenticate?transaction_id=tx1');
 });
 
 it('surfaces Wave errors', function (int $status, array $body, string $code) {
@@ -153,14 +153,16 @@ it('rejects a callback whose signed fields are not scalar', function () {
 it('rejects a time to live that is not greater than 0', function () {
     $message = 'The wave_money configuration [time_to_live_in_seconds] must be a whole number greater than 0.';
 
-    expect(fn () => new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 0, timeoutSeconds: 30))->toThrow(ConfigurationException::class, $message)
-        ->and(fn () => WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => '-5', 'timeout_in_seconds' => 30]))->toThrow(ConfigurationException::class, $message);
+    expect(fn () => new WaveMoneyConfig('m', 's', 'Shop', 'https://payments.wavemoney.io', 'https://payments.wavemoney.io', timeToLiveSeconds: 0))->toThrow(ConfigurationException::class, $message)
+        ->and(fn () => WaveMoneyConfig::fromArray(gatewayConfig('wave_money', ['time_to_live_in_seconds' => '-5'])))->toThrow(ConfigurationException::class, $message);
 });
 
-it('keeps the configured time to live, which is optional', function () {
-    expect((new WaveMoneyConfig('m', 's', 'Shop', timeToLiveSeconds: 600, timeoutSeconds: 30))->timeToLiveSeconds)->toBe(600)
-        ->and(WaveMoneyConfig::fromArray(['merchant_id' => 'm', 'secret_key' => 's', 'merchant_name' => 'Shop', 'time_to_live_in_seconds' => ' '])->timeToLiveSeconds)->toBeNull();
-});
+it('requires the URLs and the time to live', function (string $key) {
+    expect(WaveMoneyConfig::fromArray(gatewayConfig('wave_money', ['time_to_live_in_seconds' => '600']))->timeToLiveSeconds)->toBe(600);
+
+    expect(fn () => WaveMoneyConfig::fromArray(gatewayConfig('wave_money', [$key => ' '])))
+        ->toThrow(ConfigurationException::class, "The wave_money configuration is missing [{$key}].");
+})->with(['base_url', 'base_redirect_url', 'time_to_live_in_seconds']);
 
 it('generates a merchant reference id when an empty one is given', function () {
     $data = new WaveMoneyPaymentData('100', 'https://shop.test/cb', 'https://shop.test/done', 'Order', [new WaveMoneyItem('A', 1000)], merchantReferenceId: '');
