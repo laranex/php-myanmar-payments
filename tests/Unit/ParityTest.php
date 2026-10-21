@@ -23,6 +23,8 @@ use Laranex\PhpMyanmarPayments\KbzPay\KbzPay;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPayConfig;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPayPaymentData;
 use Laranex\PhpMyanmarPayments\Results\FormPayment;
+use Laranex\PhpMyanmarPayments\Results\MiniAppPayment;
+use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
 use Laranex\PhpMyanmarPayments\Results\QrPayment;
 use Laranex\PhpMyanmarPayments\Support\ArrayCache;
 use Laranex\PhpMyanmarPayments\Support\Validator;
@@ -30,9 +32,14 @@ use Laranex\PhpMyanmarPayments\WavePay\WavePay;
 use Laranex\PhpMyanmarPayments\WavePay\WavePayConfig;
 use Laranex\PhpMyanmarPayments\WavePay\WavePayItem;
 use Laranex\PhpMyanmarPayments\WavePay\WavePayPaymentData;
+use Laranex\PhpMyanmarPayments\WavePayMiniApp\WavePayMiniApp;
+use Laranex\PhpMyanmarPayments\WavePayMiniApp\WavePayMiniAppConfig;
+use Laranex\PhpMyanmarPayments\WavePayMiniApp\WavePayMiniAppItem;
+use Laranex\PhpMyanmarPayments\WavePayMiniApp\WavePayMiniAppPaymentData;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqr;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrConfig;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrPaymentData;
+use Psr\SimpleCache\CacheInterface;
 
 /*
  * tests/Fixtures/parity/vectors.json is shared byte for byte with go-, node- and python-myanmar-payments:
@@ -61,6 +68,25 @@ function parityGateway(string $gateway): PaymentGateway
 }
 
 /**
+ * Verify a callback case. Wave Pay Mini App also takes the callback URL the payment was signed with.
+ *
+ * @param  array<string, mixed>  $case
+ */
+function parityHandleCallback(string $gateway, array $case): PaymentCallback
+{
+    $request = new CallbackRequest($case['body'], ['Content-Type' => $case['content_type'], ...($case['headers'] ?? [])]);
+
+    if ($gateway === 'wave_pay_mini_app') {
+        $secrets = parity()['secrets'];
+        $miniApp = new WavePayMiniApp(gatewayConfig('wave_pay_mini_app', ['secret_key' => $secrets['wave_pay_mini_app_secret_key'], 'mini_app_id' => $secrets['wave_pay_mini_app_mini_app_id']]), mockHttp());
+
+        return $miniApp->handleCallback($request, $case['callback_url']);
+    }
+
+    return parityGateway($gateway)->handleCallback($request);
+}
+
+/**
  * @return array<string, array{string, array<string, mixed>}>
  */
 function parityCallbacks(): array
@@ -77,23 +103,26 @@ function parityCallbacks(): array
 }
 
 it('verifies every shared callback vector', function (string $gateway, array $case) {
-    $request = new CallbackRequest($case['body'], ['Content-Type' => $case['content_type'], ...($case['headers'] ?? [])]);
     $expected = $case['expected'];
 
     if (! $expected['valid']) {
-        expect(fn () => parityGateway($gateway)->handleCallback($request))
+        expect(fn () => parityHandleCallback($gateway, $case))
             ->toThrow(fn (SignatureVerificationException $e) => expect($e->getMessage())->toBe($expected['message']));
 
         return;
     }
 
-    $callback = parityGateway($gateway)->handleCallback($request);
+    $callback = parityHandleCallback($gateway, $case);
 
     expect($callback->orderId)->toBe($expected['order_id'])
         ->and($callback->status->value)->toBe($expected['status'])
         ->and($callback->gatewayStatus)->toBe($expected['gateway_status'])
         ->and($callback->gatewayReference)->toBe($expected['gateway_reference'] ?? null)
         ->and($callback->amount)->toBe($expected['amount'] ?? null);
+
+    if (array_key_exists('merchant_reference_id', $expected)) {
+        expect($callback->raw['merchantRefId'] ?? null)->toBe($expected['merchant_reference_id']);
+    }
 })->with(parityCallbacks());
 
 it('parses amounts like every other SDK', function () {
@@ -123,11 +152,12 @@ it('compares amounts like every other SDK', function () {
 /**
  * @param  array<string, mixed>  $env
  */
-function parityConfig(string $gateway, array $env): KbzPayConfig|WavePayConfig|AyaPayConfig|YomaMmqrConfig|CyberSourceConfig
+function parityConfig(string $gateway, array $env): KbzPayConfig|WavePayConfig|WavePayMiniAppConfig|AyaPayConfig|YomaMmqrConfig|CyberSourceConfig
 {
     return match ($gateway) {
         'kbz_pay' => KbzPayConfig::fromEnv($env),
         'wave_pay' => WavePayConfig::fromEnv($env),
+        'wave_pay_mini_app' => WavePayMiniAppConfig::fromEnv($env),
         'aya_pay' => AyaPayConfig::fromEnv($env),
         'yoma_mmqr' => YomaMmqrConfig::fromEnv($env),
         'cyber_source' => CyberSourceConfig::fromEnv($env),
@@ -137,7 +167,7 @@ function parityConfig(string $gateway, array $env): KbzPayConfig|WavePayConfig|A
 /**
  * @return array<string, string>
  */
-function parityUrls(KbzPayConfig|WavePayConfig|AyaPayConfig|YomaMmqrConfig|CyberSourceConfig $config): array
+function parityUrls(KbzPayConfig|WavePayConfig|WavePayMiniAppConfig|AyaPayConfig|YomaMmqrConfig|CyberSourceConfig $config): array
 {
     return match (true) {
         $config instanceof KbzPayConfig => ['api_url' => $config->apiUrl, 'pwa_url' => $config->pwaUrl],
@@ -158,8 +188,8 @@ it('reads the production and UAT URLs like every other SDK', function () {
     $seconds = $vector['seconds'];
 
     expect($wave->timeToLiveSeconds)->toBe($seconds['time_to_live_in_seconds'])
-        ->and([$wave->timeoutSeconds, KbzPayConfig::fromEnv($vector['env'])->timeoutSeconds, AyaPayConfig::fromEnv($vector['env'])->timeoutSeconds, YomaMmqrConfig::fromEnv($vector['env'])->timeoutSeconds])
-        ->toBe(array_fill(0, 4, $seconds['timeout_in_seconds']));
+        ->and([$wave->timeoutSeconds, KbzPayConfig::fromEnv($vector['env'])->timeoutSeconds, AyaPayConfig::fromEnv($vector['env'])->timeoutSeconds, YomaMmqrConfig::fromEnv($vector['env'])->timeoutSeconds, WavePayMiniAppConfig::fromEnv($vector['env'])->timeoutSeconds])
+        ->toBe(array_fill(0, 5, $seconds['timeout_in_seconds']));
 });
 
 it('defaults the HTTP timeout to 30 seconds like every other SDK', function () {
@@ -175,8 +205,8 @@ it('defaults the HTTP timeout to 30 seconds like every other SDK', function () {
             $env[$default['variable']] = $value;
         }
 
-        expect([KbzPayConfig::fromEnv($env)->timeoutSeconds, WavePayConfig::fromEnv($env)->timeoutSeconds, AyaPayConfig::fromEnv($env)->timeoutSeconds, YomaMmqrConfig::fromEnv($env)->timeoutSeconds])
-            ->toBe(array_fill(0, 4, $default['timeout_in_seconds']), (string) json_encode($value));
+        expect([KbzPayConfig::fromEnv($env)->timeoutSeconds, WavePayConfig::fromEnv($env)->timeoutSeconds, AyaPayConfig::fromEnv($env)->timeoutSeconds, YomaMmqrConfig::fromEnv($env)->timeoutSeconds, WavePayMiniAppConfig::fromEnv($env)->timeoutSeconds])
+            ->toBe(array_fill(0, 5, $default['timeout_in_seconds']), (string) json_encode($value));
     }
 });
 
@@ -482,6 +512,7 @@ it('collects negative amounts with the other errors like every other SDK', funct
         $build = match ($case['gateway']) {
             'kbz_pay' => fn () => new KbzPayPaymentData($data['order_id'], $data['amount'], $data['callback_url']),
             'wave_pay' => fn () => parityWavePayData($data, array_key_exists('amount', $data) ? ['amount' => $data['amount']] : []),
+            'wave_pay_mini_app' => fn () => parityMiniAppData($data),
             'aya_pay' => fn () => new AyaPayPaymentData($data['order_id'], $data['amount'], $data['channel'], AyaPayMethod::from($data['method'])),
             'yoma_mmqr' => fn () => new YomaMmqrPaymentData($data['order_id'], $data['amount'], $data['description']),
             'cyber_source' => fn () => new CyberSourcePaymentData($data['order_id'], $data['amount'], $data['callback_url'], $data['currency'], CyberSourceTransactionType::from($data['transaction_type']), $data['locale']),
@@ -601,5 +632,162 @@ it('reads KBZ Pay responses like every other SDK', function () {
             ? ['qr_string' => $result->qrString, 'reference' => $result->reference]
             : ['order_id' => $result->orderId, 'status' => $result->status->value, 'gateway_status' => $result->gatewayStatus, 'gateway_reference' => $result->gatewayReference, 'amount' => $result->amount])
             ->toBe($case['result'], $case['name']);
+    }
+});
+
+/**
+ * @param  array<string, mixed>  $data  snake_case fields; an item is [name, amount] where a string amount is parsed.
+ */
+function parityMiniAppData(array $data): WavePayMiniAppPaymentData
+{
+    return new WavePayMiniAppPaymentData(
+        orderId: $data['order_id'],
+        callbackUrl: $data['callback_url'],
+        items: array_map(fn (array $item): WavePayMiniAppItem => new WavePayMiniAppItem($item[0], parityAmount($item[1]) ?? 0), $data['items']),
+        amount: parityAmount($data['amount'] ?? null),
+        merchantReferenceId: $data['merchant_reference_id'] ?? null,
+    );
+}
+
+/**
+ * A PSR-16 cache that records the TTL of the last value it was given.
+ */
+function parityTtlCache(): CacheInterface
+{
+    return new class implements CacheInterface
+    {
+        public mixed $ttl = null;
+
+        /**
+         * @var array<string, mixed>
+         */
+        public array $values = [];
+
+        public function get(string $key, mixed $default = null): mixed
+        {
+            return $this->values[$key] ?? $default;
+        }
+
+        public function set(string $key, mixed $value, null|int|DateInterval $ttl = null): bool
+        {
+            $this->values[$key] = $value;
+            $this->ttl = $ttl;
+
+            return true;
+        }
+
+        public function delete(string $key): bool
+        {
+            unset($this->values[$key]);
+
+            return true;
+        }
+
+        public function clear(): bool
+        {
+            $this->values = [];
+
+            return true;
+        }
+
+        public function getMultiple(iterable $keys, mixed $default = null): iterable
+        {
+            return [];
+        }
+
+        public function setMultiple(iterable $values, null|int|DateInterval $ttl = null): bool
+        {
+            return true;
+        }
+
+        public function deleteMultiple(iterable $keys): bool
+        {
+            return true;
+        }
+
+        public function has(string $key): bool
+        {
+            return isset($this->values[$key]);
+        }
+    };
+}
+
+it('requests and caches the Wave Pay Mini App access token like every other SDK', function () {
+    $vector = parity()['wave_pay_mini_app_token'];
+    $expected = $vector['expected'];
+    $cache = parityTtlCache();
+    $http = mockHttp(new Response($vector['response']['status'], ['Content-Type' => 'application/json'], $vector['response']['body']), new Response(200, [], '{"access_token":"token-2"}'));
+    $gateway = new WavePayMiniApp(WavePayMiniAppConfig::fromArray($vector['config']), $http, $cache);
+
+    expect($gateway->accessToken())->toBe($expected['token'])
+        ->and($gateway->accessToken())->toBe($expected['token']);
+
+    $request = $http->getLastRequest();
+
+    expect($http->getRequests())->toHaveCount(1)
+        ->and($request->getMethod())->toBe($expected['method'])
+        ->and((string) $request->getUri())->toBe($expected['url'])
+        ->and(array_map(fn (string $name): string => $request->getHeaderLine($name), array_combine(array_keys($expected['headers']), array_keys($expected['headers']))))->toBe($expected['headers'])
+        ->and((string) $request->getBody())->toBe($expected['body'])
+        ->and(requestForm($request))->toBe($expected['form'])
+        ->and($cache->get($expected['cache_key']))->toBe($expected['token'])
+        ->and($cache->ttl)->toBe($expected['ttl']);
+
+    $gateway->forgetToken();
+
+    expect($cache->get($expected['cache_key']))->toBeNull()
+        ->and($gateway->accessToken())->toBe('token-2');
+
+    foreach ($vector['tokens'] as $case) {
+        $cache = parityTtlCache();
+        $http = mockHttp(new Response($case['status'] ?? 200, ['Content-Type' => 'application/json'], $case['body']));
+
+        expect((new WavePayMiniApp(WavePayMiniAppConfig::fromArray($vector['config']), $http, $cache))->accessToken())->toBe($case['token'], $case['body'])
+            ->and($cache->ttl)->toBe($case['ttl'], $case['body']);
+    }
+
+    foreach ($vector['errors'] as $case) {
+        $gateway = new WavePayMiniApp(WavePayMiniAppConfig::fromArray($vector['config']), mockHttp(new Response($case['status'], ['Content-Type' => 'application/json'], $case['body'])));
+
+        parityApiError(fn () => $gateway->accessToken(), $case, $case['body']);
+    }
+});
+
+it('signs the same Wave Pay Mini App payment payload as every other SDK', function () {
+    $vector = parity()['wave_pay_mini_app_payment'];
+    $gateway = new WavePayMiniApp(WavePayMiniAppConfig::fromArray($vector['config']), mockHttp());
+
+    foreach ($vector['cases'] as $case) {
+        $payment = $gateway->payment(parityMiniAppData($case['data']));
+
+        expect($payment)->toBeInstanceOf(MiniAppPayment::class)
+            ->and($payment->hashValue)->toBe(hash_hmac('sha256', $case['hash_input'], $vector['config']['secret_key']), $case['name'])
+            ->and($payment->toArray())->toBe($case['payload'], $case['name'])
+            ->and($payment->toJson())->toBe($case['json'], $case['name'])
+            ->and(json_encode($payment, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))->toBe($case['json'], $case['name']);
+    }
+
+    $exact = $vector['exact_amount'];
+    $payment = $gateway->payment(parityMiniAppData($exact['data']));
+
+    expect($payment->amount->toString())->toBe($exact['amount_json'])
+        ->and($payment->hashValue)->toBe($exact['hash'])
+        ->and(hash_hmac('sha256', $exact['hash_input'], $vector['config']['secret_key']))->toBe($exact['hash'])
+        ->and($payment->toJson())->toBe($exact['json']);
+
+    $generated = $vector['generated_reference'];
+
+    foreach ($generated['values'] as $value) {
+        $payment = $gateway->payment(parityMiniAppData(['merchant_reference_id' => $value] + $generated['data']));
+
+        expect($payment->merchantReferenceId)->toMatch('/'.$generated['pattern'].'/');
+    }
+});
+
+it('validates Wave Pay Mini App payments in the same order as every other SDK', function () {
+    $vector = parity()['wave_pay_mini_app_validation'];
+
+    foreach ($vector['cases'] as $case) {
+        expect(parityErrors(fn () => parityMiniAppData($case['data'] + $vector['data'])))->toBe($case['errors'], $case['name']);
     }
 });

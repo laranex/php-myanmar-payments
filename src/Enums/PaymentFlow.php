@@ -20,4 +20,7 @@ enum PaymentFlow: string
 
     /** Hand a signed payload to your mobile app, which opens the wallet SDK. */
     case App = 'app';
+
+    /** Hand a signed payload to your mini app page, which passes it to the wallet's JavaScript SDK. */
+    case MiniApp = 'mini_app';
 }

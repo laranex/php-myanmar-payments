@@ -5,7 +5,7 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/laranex/php-myanmar-payments.svg?style=flat-square)](https://packagist.org/packages/laranex/php-myanmar-payments)
 [![License](https://img.shields.io/packagist/l/laranex/php-myanmar-payments.svg?style=flat-square)](LICENSE.md)
 
-PHP SDK for Myanmar payment gateways: KBZ Pay, Wave Pay, AYA Pay, Yoma MMQR and CyberSource. Typed requests and results, exact amounts, works with any PSR-18 HTTP client. Built for humans and AI agents.
+PHP SDK for Myanmar payment gateways: KBZ Pay, Wave Pay, Wave Pay Mini App, AYA Pay, Yoma MMQR and CyberSource. Typed requests and results, exact amounts, works with any PSR-18 HTTP client. Built for humans and AI agents.
 
 Every Myanmar payment gateway signs its requests and callbacks its own way, reports its own status codes and has its own rules for amounts. PHP Myanmar Payments handles all of that behind one typed API for plain PHP and any framework: build the payment data, start the payment, then verify the callback the gateway sends back.
 
@@ -45,6 +45,7 @@ The full documentation lives at **[laranex.vercel.app/php-myanmar-payments](http
 - [Testing](https://laranex.vercel.app/php-myanmar-payments/testing): faking gateway calls and replaying signed callbacks in your tests
 - [KBZ Pay](https://laranex.vercel.app/php-myanmar-payments/drivers/kbz-pay): PWA redirect, QR and in-app payments, status checks and callbacks
 - [Wave Pay](https://laranex.vercel.app/php-myanmar-payments/drivers/wave-pay): redirect payments with line items and verified callbacks
+- [Wave Pay Mini App](https://laranex.vercel.app/php-myanmar-payments/drivers/wave-pay-mini-app): access tokens, signed payment payloads for Wave's JavaScript SDK and verified callbacks
 - [AYA Pay](https://laranex.vercel.app/php-myanmar-payments/drivers/aya-pay): hosted checkout for AYA Pay, other wallets and cards, with status checks
 - [Yoma MMQR](https://laranex.vercel.app/php-myanmar-payments/drivers/yoma-mmqr): QR images, QR renewal, status checks and verified callbacks
 - [CyberSource](https://laranex.vercel.app/php-myanmar-payments/drivers/cyber-source): Secure Acceptance card payments through a signed hosted checkout form

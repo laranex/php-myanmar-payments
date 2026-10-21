@@ -12,6 +12,8 @@ use Laranex\PhpMyanmarPayments\KbzPay\KbzPay;
 use Laranex\PhpMyanmarPayments\KbzPay\KbzPayConfig;
 use Laranex\PhpMyanmarPayments\WavePay\WavePay;
 use Laranex\PhpMyanmarPayments\WavePay\WavePayConfig;
+use Laranex\PhpMyanmarPayments\WavePayMiniApp\WavePayMiniApp;
+use Laranex\PhpMyanmarPayments\WavePayMiniApp\WavePayMiniAppConfig;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqr;
 use Laranex\PhpMyanmarPayments\YomaMmqr\YomaMmqrConfig;
 use Psr\Http\Client\ClientInterface;
@@ -32,6 +34,8 @@ class MyanmarPayments
 
     private ?WavePay $wavePay = null;
 
+    private ?WavePayMiniApp $wavePayMiniApp = null;
+
     private ?AyaPay $ayaPay = null;
 
     private ?YomaMmqr $yomaMmqr = null;
@@ -46,7 +50,7 @@ class MyanmarPayments
     /**
      * Each entry is a config object or the array its `fromArray()` takes.
      *
-     * @param  array{kbz_pay?: KbzPayConfig|array<string, mixed>, wave_pay?: WavePayConfig|array<string, mixed>, aya_pay?: AyaPayConfig|array<string, mixed>, yoma_mmqr?: YomaMmqrConfig|array<string, mixed>, cyber_source?: CyberSourceConfig|array<string, mixed>}  $config
+     * @param  array{kbz_pay?: KbzPayConfig|array<string, mixed>, wave_pay?: WavePayConfig|array<string, mixed>, wave_pay_mini_app?: WavePayMiniAppConfig|array<string, mixed>, aya_pay?: AyaPayConfig|array<string, mixed>, yoma_mmqr?: YomaMmqrConfig|array<string, mixed>, cyber_source?: CyberSourceConfig|array<string, mixed>}  $config
      */
     public function __construct(
         protected readonly array $config,
@@ -55,7 +59,7 @@ class MyanmarPayments
     ) {}
 
     /**
-     * Read every gateway's configuration from environment variables (`KBZ_PAY_*`, `WAVE_PAY_*`, `AYA_PAY_*`,
+     * Read every gateway's configuration from environment variables (`KBZ_PAY_*`, `WAVE_PAY_*`, `WAVE_PAY_MINI_APP_*`, `AYA_PAY_*`,
      * `YOMA_MMQR_*`, `CYBER_SOURCE_*` and `MYANMAR_PAYMENTS_HTTP_TIMEOUT`) when the gateway is first used.
      *
      * @param  array<array-key, mixed>|null  $env  Variables to read; defaults to `getenv()` merged with `$_ENV`.
@@ -66,6 +70,7 @@ class MyanmarPayments
         $payments->envSources = [
             'kbz_pay' => fn (): KbzPayConfig => KbzPayConfig::fromEnv($env),
             'wave_pay' => fn (): WavePayConfig => WavePayConfig::fromEnv($env),
+            'wave_pay_mini_app' => fn (): WavePayMiniAppConfig => WavePayMiniAppConfig::fromEnv($env),
             'aya_pay' => fn (): AyaPayConfig => AyaPayConfig::fromEnv($env),
             'yoma_mmqr' => fn (): YomaMmqrConfig => YomaMmqrConfig::fromEnv($env),
             'cyber_source' => fn (): CyberSourceConfig => CyberSourceConfig::fromEnv($env),
@@ -92,6 +97,16 @@ class MyanmarPayments
         }
 
         return $this->wavePay;
+    }
+
+    public function wavePayMiniApp(): WavePayMiniApp
+    {
+        if ($this->wavePayMiniApp === null) {
+            $entry = $this->entry('wave_pay_mini_app');
+            $this->wavePayMiniApp = $this->newWavePayMiniApp($entry instanceof WavePayMiniAppConfig ? $entry : WavePayMiniAppConfig::fromArray($this->configFor('wave_pay_mini_app')));
+        }
+
+        return $this->wavePayMiniApp;
     }
 
     public function ayaPay(): AyaPay
@@ -132,6 +147,11 @@ class MyanmarPayments
     protected function newWavePay(WavePayConfig $config): WavePay
     {
         return new WavePay($config, $this->httpClient);
+    }
+
+    protected function newWavePayMiniApp(WavePayMiniAppConfig $config): WavePayMiniApp
+    {
+        return new WavePayMiniApp($config, $this->httpClient, $this->cache);
     }
 
     protected function newAyaPay(AyaPayConfig $config): AyaPay

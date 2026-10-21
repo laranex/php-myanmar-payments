@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
+use Laranex\PhpMyanmarPayments\Amount;
 use Laranex\PhpMyanmarPayments\Enums\PaymentFlow;
 use Laranex\PhpMyanmarPayments\Enums\PaymentStatus;
 use Laranex\PhpMyanmarPayments\Http\Acknowledgement;
 use Laranex\PhpMyanmarPayments\Results\AppPayment;
 use Laranex\PhpMyanmarPayments\Results\FormPayment;
+use Laranex\PhpMyanmarPayments\Results\MiniAppPayment;
 use Laranex\PhpMyanmarPayments\Results\PaymentCallback;
 use Laranex\PhpMyanmarPayments\Results\PaymentStatusResult;
 use Laranex\PhpMyanmarPayments\Results\QrPayment;
@@ -16,7 +18,8 @@ it('tags every result with its flow', function () {
     expect((new RedirectPayment('O1', 'https://pay.test'))->flow())->toBe(PaymentFlow::Redirect)
         ->and((new FormPayment('O1', 'https://pay.test', []))->flow())->toBe(PaymentFlow::Form)
         ->and((new QrPayment('O1'))->flow())->toBe(PaymentFlow::Qr)
-        ->and((new AppPayment('O1', 'info', 'SIGN', 'SHA256'))->flow())->toBe(PaymentFlow::App);
+        ->and((new AppPayment('O1', 'info', 'SIGN', 'SHA256'))->flow())->toBe(PaymentFlow::App)
+        ->and((new MiniAppPayment('O1', Amount::kyat(1), 'M', 'R', 'https://shop.test/cb', 'h', []))->flow())->toBe(PaymentFlow::MiniApp);
 });
 
 it('renders an auto-submitting form with every value escaped', function () {
